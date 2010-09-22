@@ -5,7 +5,13 @@ module Lapaz
       class ComponentNotFoundException < StandardError; end
       class ProducerComponentNotAllowed < StandardError; end
 
-      def initialize(*args)
+      attr_reader :ctx
+
+      def initialize(opts)
+        @addr, @route_uuid = opts.values_at(:route_internal_addr, :route_uuid)
+        @loop_once = opts[:loop_once] || false
+
+        @queue = Queue.new
         @chain = []
       end
 
@@ -36,11 +42,23 @@ module Lapaz
         self
       end
 
+      def publish(&blk)
+        @queue << blk
+      end
+
       def run()
+        @ctx = ZMQ::Context.new(1)
+        @pub_sock = ctx.socket(ZMQ::PUB)
+        @pub_sock.bind @addr
+
         @chain.reverse.each{|component|
-          component.run()
+          component.run(self)
           sleep 0.5
         }
+        loop do
+          callable = @queue.pop
+          callable.call(@pub_sock)
+        end
       end
 
       def inspect
@@ -59,9 +77,13 @@ module Lapaz
         raise "Subclass this"
       end
 
-      def from(component)
-        Route.new.from(component)
+      def init(opts)
+        Route.new(opts)
       end
+
+      #def from(component)
+      #  Route.new.from(component)
+      #end
 
       def add_route(built_route)
         @routes.push(built_route)
@@ -76,7 +98,7 @@ module Lapaz
         end.each{|thread| thread.join}
       end
 
-      def self.start()
+      def self.start
         router = new
         router.setup_routes
         router.run()

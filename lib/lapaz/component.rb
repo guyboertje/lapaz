@@ -4,30 +4,24 @@ Thread.abort_on_exception = true
 module Lapaz
   class Component
 
-    attr_reader :addr, :port, :route_uuid, :sequence_id, :workunit, :pub_addr, :sub_addr, :loop_once
+    attr_reader :addr, :sub_sock, :route_uuid, :sequence_id, :workunit, :loop_once
 
+    #:route,
     def initialize(opts)
-      base, @route_uuid, @sequence_id, @workunit = opts.values_at(:route_internal_addr, :route_uuid, :seq_id, :work)
+      @addr, @route_uuid, @sequence_id, @workunit = opts.values_at(:route_internal_addr, :route_uuid, :seq_id, :work)
       @loop_once = opts[:loop_once] || false
-      @addr, p = base.split('--')
-      @port = p.to_i + @sequence_id
+      @sub_topic = "#{@router_uuid}/#{@sequence_id}"
+      @pub_topic = "#{@router_uuid}/#{@sequence_id.next}"
     end
     def to_hash
       {:route_uuid=>@route_uuid, :sequence_id=>@sequence_id, :addr=>@addr, :port=>@port}
     end
-    def run()
+    def run(route)
+      @route = route
       th = Thread.new do
-        ctx = ZMQ::Context.new(1)
-        #unless producer?
-          @sub_addr = @addr + ":" + @port.to_s
-          @sub_sock = ctx.socket(ZMQ::PULL)
-          @sub_sock.connect @sub_addr
-        #end
-        #unless consumer?
-          @pub_addr = @addr + ":" + @port.next.to_s
-          @pub_sock = ctx.socket(ZMQ::PUSH)
-          @pub_sock.bind @pub_addr
-        #end
+        @sub_sock = @route.ctx.socket(ZMQ::SUB)
+        @sub_sock.setsockopt(ZMQ::SUBSCRIBE,@sub_topic)
+        @sub_sock.connect @addr
         #begin
           loop do
             msg = push(process(pull))
@@ -40,7 +34,6 @@ module Lapaz
         #  puts "!!!!----!!!!#{e.inspect}"
         #end
       end
-      th.join
     end
 
     def work(msg)
@@ -55,8 +48,11 @@ module Lapaz
 
     def push(msg)
       print "-#{sequence_id}|"
-      #pub_sock.send_string("#{route_uuid}/#{sequence_id.next}", ZMQ::SNDMORE) #TOPIC
-      @pub_sock.send_string(BERT.encode(msg.to_hash))                          #BODY
+      @route.publish do |sock|
+        sock.send_string(@pub_topic, ZMQ::SNDMORE) #TOPIC
+        sock.send_string(BERT.encode(msg.to_hash)) #BODY
+      end
+
       print "-#{sequence_id}"
       msg
     end
@@ -74,9 +70,9 @@ module Lapaz
     end
 
     def pull(msg=nil)
-      body = @sub_sock.recv_string
-      #topic = sub_sock.recv_string
-      #body  = sub_sock.more_parts? ? sub_sock.recv_string : nil
+
+      topic = @sub_sock.recv_string
+      body  = @sub_sock.more_parts? ? @sub_sock.recv_string : nil
       print "+#{sequence_id}|"
       h = body ? BERT.decode(body) : {}
       Lapaz::DefaultMessage.new(h)
