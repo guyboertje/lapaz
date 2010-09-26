@@ -1,24 +1,60 @@
 module Lapaz
   module Processor
-
-    class YamlProcessor < Lapaz::Component
+    module Base
       def producer?; false; end
       def consumer?; false; end
+    end
+    class YamlProcessor < Lapaz::Component
+      include Base
       def work(msg)
-        print "^#{sequence_id}|"
         key,obj = :warnings,"YamlProcessor: no work to do"
         if msg.headers[:file_contents_type] == 'yaml'
           xfrm = YAML.parse(msg.body[:file_contents]).transform
           key,obj = :body,{xfrm.type_id.to_sym => [xfrm.value]}
-          print '.'
           msg.headers.delete(:file_contents_type)
           msg.body.delete(:file_contents)
-        else
-          print ','
         end
         msg.add_to key,obj
       end
     end
-
+    class Tester < Lapaz::Component
+      include Base
+      def work(msg)
+        #Thread.new{sleep(rand/10.0)}.join
+        msg
+      end
+    end
+    class Purchases < Tester
+      include Base
+      def work(msg)
+        #return super unless msg.has_body_key?(:request)
+        #req = msg.body[:request]
+        #return super unless PATH_RE.match(req['path'])
+        #get purchase from datastore
+        super
+        pch = [{'id'=>'1234-DSF','contact_id'=>'886644','stock_id'=>'4521','notes'=>'rest of purchase object here'}]
+        msg.add :body,{:purchases=>pch}
+      end
+    end
+    class Contacts  < Tester
+      include Base
+      def work(msg)
+        #return super unless msg.has_body_key?(:request)
+        #req = msg.body[:request]
+        #return super unless PATH_RE.match(req['path'])
+        super
+        msg.add :body,{:contacts=>[{'id'=>'886644','name'=>'Bob Smith','age'=>32,'notes'=>'rest of contact object here'}]}
+      end
+    end
+    class StockItems < Tester
+      include Base
+      def work(msg)
+        #return super unless msg.has_body_key?(:request)
+        #req = msg.body[:request]
+        #return super unless PATH_RE.match(req['path'])
+        super
+        msg.add :body,{:stock_items=>[{'id'=>'4521','name'=>'Widget X','price'=>45.21,'ccy'=>'EUR','notes'=>'rest of stock object here'}]}
+      end
+    end
   end
 end

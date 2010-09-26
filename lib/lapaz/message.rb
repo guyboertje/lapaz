@@ -9,27 +9,33 @@ module Lapaz
       @warnings = opts[:warnings] || []
       @kind = opts[:kind] || "base"
     end
-
+    def has_header_key?(key)
+      headers.has_key? key
+    end
+    def has_body_key?(key)
+      body.has_key? key
+    end
     def add_to(where, what)
       case where
       when :headers
-        headers.merge! what
+        @headers.merge! what
       when :body
-        body.merge! what
+        @body.merge! what
       when :errors
-        errors << what
+        @errors << what
       when :warnings
-        warnings << what
+        @warnings << what
       end
       self
     end
+    alias :add :add_to
 
-    def merge(message)
+    def merge!(message)
       return self unless message
-      headers.merge! message.headers
-      body.merge! message.body
-      errors += message.errors
-      warnings += message.warnings
+      @headers.merge! message.headers
+      @body.merge! message.body
+      @errors += message.errors
+      @warnings += message.warnings
       self
     end
 
@@ -55,7 +61,7 @@ module Lapaz
       h = opts.delete(:headers)
       b = opts.delete(:body)
       h.merge!(opts)
-      super({:kind=>'mongrel',:headers=>h,:errors=>e,:body=>b})
+      super({:kind=>'mongrel2',:headers=>h,:errors=>e,:body=>b})
     end
   end
 end
