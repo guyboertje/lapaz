@@ -41,7 +41,6 @@ module Lapaz
       end
     end
 
-=begin
     class MongrelProducer < Base
 
       attr_accessor :conn
@@ -61,6 +60,6 @@ module Lapaz
         {:message=>msg, :topic=>nil}
       end
     end
-=end
+
   end
 end

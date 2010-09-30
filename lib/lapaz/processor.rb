@@ -17,6 +17,16 @@ module Lapaz
         msg.add_to key,obj
       end
     end
+    class Delayer < Lapaz::Component
+      def initialize(opts)
+        @delay_for = opts[:delay_for]
+        super
+      end
+      def work(msg)
+        Thread.new{sleep(@delay_for)}.join
+        msg
+      end
+    end
     class Tester < Lapaz::Component
       include Base
       def work(msg)
@@ -27,10 +37,6 @@ module Lapaz
     class Purchases < Tester
       include Base
       def work(msg)
-        #return super unless msg.has_body_key?(:request)
-        #req = msg.body[:request]
-        #return super unless PATH_RE.match(req['path'])
-        #get purchase from datastore
         super
         pch = [{'id'=>'1234-DSF','contact_id'=>'886644','stock_id'=>'4521','notes'=>'rest of purchase object here'}]
         msg.add :body,{:purchases=>pch}
@@ -39,9 +45,6 @@ module Lapaz
     class Contacts  < Tester
       include Base
       def work(msg)
-        #return super unless msg.has_body_key?(:request)
-        #req = msg.body[:request]
-        #return super unless PATH_RE.match(req['path'])
         super
         msg.add :body,{:contacts=>[{'id'=>'886644','name'=>'Bob Smith','age'=>32,'notes'=>'rest of contact object here'}]}
       end
@@ -49,9 +52,6 @@ module Lapaz
     class StockItems < Tester
       include Base
       def work(msg)
-        #return super unless msg.has_body_key?(:request)
-        #req = msg.body[:request]
-        #return super unless PATH_RE.match(req['path'])
         super
         msg.add :body,{:stock_items=>[{'id'=>'4521','name'=>'Widget X','price'=>45.21,'ccy'=>'EUR','notes'=>'rest of stock object here'}]}
       end

@@ -3,6 +3,33 @@ Thread.abort_on_exception = true
 
 module Lapaz
   class Component
+    class Queueable
+      attr_reader :route,:name,:mux,:msg
+      attr_accessor :seq_id
+      def initialize(route,id,mux,msg)
+        @route = route
+        if id.kind_of?(Integer)
+          @seq_id = id
+          @name = ''
+        else
+          @seq_id = 0
+          @name = id
+        end
+        @mux = mux
+        @msg = msg
+      end
+      def named?
+        !@name.empty?
+      end
+      def topic
+        a = [@route,@seq_id]
+        a << mux if mux && !mux.empty?
+        a.join('/')
+      end
+      def inspect
+        "route: #{@route}, name: #{@name}, mux: #{@mux}, seq_id: #{@seq_id}"
+      end
+    end
     class Accumulator
       attr_reader :count, :max
       def initialize(msg,max)
@@ -22,22 +49,25 @@ module Lapaz
       end
     end
     DEMUX_RE = /.+\/[0-9]+\/([0-9]+)\.([0-9]+)/
-    attr_reader :addr, :sub_sock, :route_name, :seq_id, :mux_id, :workunit, :loop_once
+    attr_reader :addr, :sub_sock, :route_name, :seq_id, :mux_id, :workunit, :loop_once, :name, :pub_to, :pub_at
 
     #:route,
     def initialize(opts)
       @addr, @seq_id, @workunit = opts.values_at(:route_internal_addr, :seq_id, :work)
-      @mux_id, @route_name = opts.values_at(:mux_id, :route_name)# "1.1"
+      @name, @mux_id, @route_name = opts.values_at(:name, :mux_id, :route_name)# "1.1"
+      @forward_to,@forward_at = opts.values_at(:forward_to,:forward_at)
       @loop_once = opts[:loop_once] || false
       @sub_topic = "#{@route_name}/#{@seq_id}"
-      @pub_topic = "#{@route_name}/#{@seq_id.next}"
+      @pub_to = @forward_to || @route_name
+      @pub_at = @forward_at || @seq_id.next
       @collator = {}
     end
     def to_hash
-      {:route_name=>@route_name, :seq_id=>@seq_id, :mux_id=>@mux_id, :addr=>@addr}
+      {:route_name=>@route_name, :seq_id=>@seq_id, :mux_id=>@mux_id, :addr=>@addr,:sub_topic=>@sub_topic}
     end
     def make_sub_socket
       @sub_sock = @route.ctx.socket(ZMQ::SUB)
+      #puts self.to_hash.inspect
       @sub_sock.setsockopt(ZMQ::SUBSCRIBE,@sub_topic)
       @sub_sock.connect @addr
     end
@@ -109,13 +139,10 @@ module Lapaz
     end
 
     def push(msg)
-      fpt = @pub_topic + (@mux_id ? "/#{@mux_id}" : "")
       menc = BERT.encode(msg.to_hash)
-      @route.publish do |sock|
-        sock.send_string(fpt, ZMQ::SNDMORE) #TOPIC
-        sock.send_string(menc) #BODY
-      end
-      puts "->>#{fpt}"
+      q_msg = Queueable.new(@pub_to,@pub_at,@mux_id,menc)
+      err = @route.publish(q_msg)
+      puts "publish error: #{err}" unless err.empty?
       msg
     rescue => e
       puts e.message

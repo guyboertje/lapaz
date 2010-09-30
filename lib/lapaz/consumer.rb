@@ -15,5 +15,7 @@ module Lapaz
         Lapaz::DefaultMessage.new
       end
     end
+
+    Forwarder = Class.new(Base)
   end
 end
