@@ -27,9 +27,16 @@ module Lapaz
         msg
       end
     end
+    class MongoReader < Lapaz::Component
+      include Base
+      def work(msg)
+        dfadf
+      end
+    end
     class Tester < Lapaz::Component
       include Base
       def work(msg)
+        #simulate some work being done
         #Thread.new{sleep(rand/10.0)}.join
         msg
       end

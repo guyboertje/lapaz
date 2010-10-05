@@ -5,16 +5,15 @@ module Lapaz
       ComponentNotFoundException = Class.new(StandardError)
       ProducerComponentNotAllowed = Class.new(StandardError)
 
-      attr_reader :ctx, :name, :router, :named_steps
+      attr_reader :name, :app, :named_steps
 
-      def initialize(opts,router)
-        @addr,@name = opts.values_at(:route_internal_addr,:route_name)
+      def initialize(opts,app)
+        @name = opts[:route_name]
         @route_uuid = ::UUID.generate
         @loop_once = opts[:loop_once] || false
         @opts = opts
-        @queue = Queue.new
         @chain = []
-        @router = router
+        @app = app
         @named_steps = {}
       end
 
@@ -34,36 +33,21 @@ module Lapaz
         self
       end
 
-      def publish(q_object)
-        #puts q_object.inspect
-        route_name = q_object.route
-        if route_name != self.name
-          ret = @router.publish(q_object)
-        else
-          return "In route: #{self.name}, cannot find a step named: #{q_object.name}" if q_object.named? && !@named_steps.has_key?(q_object.name)
-          if q_object.named?
-            q_object.seq_id = @named_steps[q_object.name]
-          end
-          @queue << q_object
-          ret = ''
+      def publish(sock,q_object)
+        raise "In route: #{self.name}, cannot find a step named: #{q_object.name}" if q_object.named? && !@named_steps.has_key?(q_object.name)
+        if q_object.named?
+          q_object.seq_id = @named_steps[q_object.name]
         end
-        ret
+        sock.send_string(q_object.topic, ZMQ::SNDMORE) #TOPIC
+        sock.send_string(q_object.msg) #BODY
+        puts "->>#{q_object.topic}"
       end
 
       def run()
-        @ctx = ZMQ::Context.new(1)
-        @pub_sock = ctx.socket(ZMQ::PUB)
-        @pub_sock.bind @addr
         @chain.reverse.each{|component|
-          component.run(self)
+          component.run(app)
           sleep 0.2
         }
-        loop do
-          q_object = @queue.pop
-          @pub_sock.send_string(q_object.topic, ZMQ::SNDMORE) #TOPIC
-          @pub_sock.send_string(q_object.msg) #BODY
-          puts "->>#{q_object.topic}"
-        end
       end
 
       def inspect
@@ -73,16 +57,29 @@ module Lapaz
     end
 
     class Router
-      def initialize
-        puts "..."
+      attr_reader :path_handler, :name
+      def initialize(name)
+        @name = name
         @routes ||= {}
+        @path_handler = PathHandler.new
+        @queue = Queue.new
+
+        puts "... #{name} ..."
+      end
+
+      def enqueue(q_object)
+        #puts q_object.inspect
+        @queue << q_object
       end
 
       def publish(q_object)
         route_name = q_object.route
-        return "Cannot find a route named: #{route_name}" unless @routes.has_key?(route_name)
-        @routes[route_name].publish(q_object)
-        ''
+        raise "Cannot find a route named: #{route_name}" unless @routes.has_key?(route_name)
+        @routes[route_name].publish(@pub_sock, q_object)
+      end
+
+      def define_handlers
+        yield @path_handler
       end
 
       def setup_routes(&block)
@@ -100,18 +97,26 @@ module Lapaz
       alias :add :add_route
 
       def run()
-        #puts @routes.inspect
+
         @routes.values.collect do |r|
           Thread.new { r.run() }
         end.each{|thread| thread.join}
+
+        @pub_sock = lapazcfg.app(LpzEnv).ctx.socket(ZMQ::PUB)
+        @pub_sock.bind lapazcfg.app(LpzEnv).int_endpt
+
+        loop do
+          publish @queue.pop
+        end
       end
 
-      def self.start
-        router = new
+      def self.start(name)
+        router = new(name)
         router.setup_routes
         router.run()
-
       end
+
+
     end
   end
 

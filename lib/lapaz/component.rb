@@ -1,12 +1,11 @@
-
 Thread.abort_on_exception = true
 
 module Lapaz
   class Component
     class Queueable
-      attr_reader :route,:name,:mux,:msg
-      attr_accessor :seq_id
-      def initialize(route,id,mux,msg)
+      attr_reader :route,:name,:mux
+      attr_accessor :seq_id,:msg
+      def initialize(route,id,mux,msg=nil)
         @route = route
         if id.kind_of?(Integer)
           @seq_id = id
@@ -49,13 +48,13 @@ module Lapaz
       end
     end
     DEMUX_RE = /.+\/[0-9]+\/([0-9]+)\.([0-9]+)/
-    attr_reader :addr, :sub_sock, :route_name, :seq_id, :mux_id, :workunit, :loop_once, :name, :pub_to, :pub_at
+    attr_reader :sub_sock, :route_name, :seq_id, :mux_id, :workunit, :loop_once, :name, :pub_to, :pub_at
 
-    #:route,
+    #:app,
     def initialize(opts)
-      @addr, @seq_id, @workunit = opts.values_at(:route_internal_addr, :seq_id, :work)
-      @name, @mux_id, @route_name = opts.values_at(:name, :mux_id, :route_name)# "1.1"
-      @forward_to,@forward_at = opts.values_at(:forward_to,:forward_at)
+      @seq_id, @name, @mux_id, @route_name = opts.values_at(:seq_id, :name, :mux_id, :route_name)
+      puts "#{@route_name} #{@seq_id} >"
+      @workunit, @forward_to, @forward_at = opts.values_at(:work, :forward_to, :forward_at)
       @loop_once = opts[:loop_once] || false
       @sub_topic = "#{@route_name}/#{@seq_id}"
       @pub_to = @forward_to || @route_name
@@ -63,16 +62,16 @@ module Lapaz
       @collator = {}
     end
     def to_hash
-      {:route_name=>@route_name, :seq_id=>@seq_id, :mux_id=>@mux_id, :addr=>@addr,:sub_topic=>@sub_topic}
+      {:route_name=>@route_name, :seq_id=>@seq_id, :mux_id=>@mux_id, :sub_topic=>@sub_topic}
     end
     def make_sub_socket
-      @sub_sock = @route.ctx.socket(ZMQ::SUB)
+      @sub_sock = lapazcfg.app(LpzEnv).ctx.socket(ZMQ::SUB)
       #puts self.to_hash.inspect
       @sub_sock.setsockopt(ZMQ::SUBSCRIBE,@sub_topic)
-      @sub_sock.connect @addr
+      @sub_sock.connect lapazcfg.app(LpzEnv).int_endpt
     end
-    def run(route)
-      @route = route
+    def run(app)
+      @app = app
       th = Thread.new do
         make_sub_socket()
         begin
@@ -80,8 +79,10 @@ module Lapaz
             msg = conveyor()
             break if loop_once || (msg && msg.headers[:stop_this_route] == @route_name)
           end
-        rescue ZMQ::SocketError => e
+        rescue => e
+          puts "???#{to_hash.inspect}"
           puts "!#{e.inspect}"
+          puts "backtrace::::: #{e.backtrace}"
         end
       end
     end
@@ -132,21 +133,19 @@ module Lapaz
         return push(process(acc.message))
       end
       nil
-    rescue => e
-      puts e.message
-      puts e.backtrace.inspect
-      nil
     end
 
-    def push(msg)
+    def push(msg,q_able=nil)
       menc = BERT.encode(msg.to_hash)
-      q_msg = Queueable.new(@pub_to,@pub_at,@mux_id,menc)
-      err = @route.publish(q_msg)
-      puts "publish error: #{err}" unless err.empty?
+      q_msg = q_able || Queueable.new(@pub_to,@pub_at,@mux_id)
+      #puts "component push queueable: #{q_msg.inspect}"
+      q_msg.msg = menc
+      @app.enqueue(q_msg)
       msg
     rescue => e
-      puts e.message
-      puts e.backtrace.inspect
+      puts "???#{to_hash.inspect}"
+      puts "!#{e.inspect}"
+      puts "backtrace::::: #{e.backtrace}"
     end
 
     def process(msg)
@@ -163,12 +162,13 @@ module Lapaz
     def pull(msg=nil)
       topic = @sub_sock.recv_string
       body  = @sub_sock.more_parts? ? @sub_sock.recv_string : nil
-      msg = Lapaz::DefaultMessage.new(body ? BERT.decode(body) : {})
+      msge = Lapaz::DefaultMessage.new(body ? BERT.decode(body) : {}).merge!(msg)
       puts "<<-#{topic}"
-      {:message=>msg,:topic=>topic}
+      {:message=>msge,:topic=>topic}
     rescue => e
-      puts e.message
-      puts e.backtrace.inspect
+      puts "???#{to_hash.inspect}"
+      puts "!#{e.inspect}"
+      puts "backtrace::::: #{e.backtrace}"
     end
 
   end

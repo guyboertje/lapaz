@@ -1,0 +1,70 @@
+run this
+if __FILE__ == $0
+
+  Thread.abort_on_exception = true
+
+  #[:INT, :TERM].each { |sig| trap(sig) {ZCTX.terminate} }
+  class TestRouter < Lapaz::Router
+    include Lapaz::Producer
+    include Lapaz::Processor
+    include Lapaz::Consumer
+    def setup_routes
+
+      o3 = {:route_internal_addr=>"tcp://127.0.0.1:14904",:route_name=>"forward_test",:seq_id=>0}
+      add_route from(TestProducer,o3).
+                to(Delayer,{:seq_id=>1, :delay_for=>3}).
+                to(Forwarder,{:seq_id=>2, :forward_to=>'parallel_test', :forward_at=>1})
+
+      o2 = {:route_internal_addr=>"tcp://127.0.0.1:14902",:route_name=>"yaml_test",:seq_id=>0}
+      o2[:filename] = "/home/gb/dev/lapaz/lib/test.yml"
+      add_route from(YamlFileProducer,o2).
+                to(YamlProcessor,{:seq_id=>1}).
+                to(Stdout,{:seq_id=>2})
+
+      o1 = {:route_internal_addr=>"tcp://127.0.0.1:14900",:route_name=>"parallel_test",:seq_id=>0}
+      add_route from(TestProducer,o1).
+                to(Purchases,{:seq_id=>1}).
+                to(Contacts,{:seq_id=>2,:mux_id=>'2.1'}).
+                to(StockItems,{:seq_id=>2,:mux_id=>'2.2'}).
+                to(Stdout,{:seq_id=>3})
+
+
+    end
+  end
+  TestRouter.start()
+end
+
+output
+...
+->>yaml_test/1
+->>forward_test/1
+<<-yaml_test/1
+<<-forward_test/1
+->>yaml_test/2
+<<-yaml_test/2
+RECV: #<Lapaz::DefaultMessage:0x71cbd4f7 @kind="default", @headers={:iter_id=>"3e2a9010-abfa-012d-671c-002354d918f8"}, @errors=[], @body={:invoices=>[{"invoice"=>34843, "date"=>Sun Sep 19 23:38:11 +0100 2010, "bill_to"=>{"given"=>"Chris", "family"=>"Dumars", "address"=>{"lines"=>"458 Walkman Dr.\nSuite #292\n", "city"=>"Royal Oak", "state"=>"MI", "postal"=>48046}}, "ship_to"=>{"given"=>"Chris", "family"=>"Dumars", "address"=>{"lines"=>"458 Walkman Dr.\nSuite #292\n", "city"=>"Royal Oak", "state"=>"MI", "postal"=>48046}}, "products"=>[{"sku"=>"BL394D", "quantity"=>4, "description"=>"Basketball", "price"=>450.0}, {"sku"=>"BL4438H", "quantity"=>1, "description"=>"Super Hoop", "price"=>2392.0}], "tax"=>251.42, "total"=>4443.52, "comments"=>"Late afternoon is best. Backup contact is Nancy Billsmer @ 338-4338.\n"}]}, @warnings=[]>
+CONSUMER: route ended
+->>parallel_test/1
+<<-parallel_test/1
+->>parallel_test/2
+<<-parallel_test/2
+<<-parallel_test/2
+->>parallel_test/3/2.2
+<<-parallel_test/3/2.2
+->>parallel_test/3/2.1
+<<-parallel_test/3/2.1
+RECV: #<Lapaz::DefaultMessage:0x681a791f @kind="default", @headers={:iter_id=>"3ec374b0-abfa-012d-671c-002354d918f8"}, @errors=[], @body={:request=>{"action"=>"GET", "path"=>"purchases/purchase", "params"=>{"id"=>"1234-DSF"}}, :purchases=>[{"id"=>"1234-DSF", "contact_id"=>"886644", "stock_id"=>"4521", "notes"=>"rest of purchase object here"}], :stock_items=>[{"id"=>"4521", "name"=>"Widget X", "price"=>45.21, "ccy"=>"EUR", "notes"=>"rest of stock object here"}], :contacts=>[{"id"=>"886644", "name"=>"Bob Smith", "age"=>32, "notes"=>"rest of contact object here"}]}, @warnings=[]>
+CONSUMER: route ended
+->>forward_test/2
+<<-forward_test/2
+->>parallel_test/1
+<<-parallel_test/1
+->>parallel_test/2
+<<-parallel_test/2
+<<-parallel_test/2
+->>parallel_test/3/2.1
+->>parallel_test/3/2.2
+<<-parallel_test/3/2.1
+<<-parallel_test/3/2.2
+RECV: #<Lapaz::DefaultMessage:0x6912d7ae @kind="default", @headers={:iter_id=>"3e2b2c50-abfa-012d-671c-002354d918f8"}, @errors=[], @body={:request=>{"action"=>"GET", "path"=>"purchases/purchase", "params"=>{"id"=>"1234-DSF"}}, :purchases=>[{"id"=>"1234-DSF", "contact_id"=>"886644", "stock_id"=>"4521", "notes"=>"rest of purchase object here"}], :contacts=>[{"id"=>"886644", "name"=>"Bob Smith", "age"=>32, "notes"=>"rest of contact object here"}], :stock_items=>[{"id"=>"4521", "name"=>"Widget X", "price"=>45.21, "ccy"=>"EUR", "notes"=>"rest of stock object here"}]}, @warnings=[]>
+CONSUMER: route ended

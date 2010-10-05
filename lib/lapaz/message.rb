@@ -42,7 +42,9 @@ module Lapaz
     def to_hash
       {:kind=>kind,:headers=>headers,:body=>body,:errors=>errors,:warnings=>warnings}
     end
-
+    def inspect
+      to_hash.inspect
+    end
   end
 
   class DefaultMessage < Message
@@ -60,8 +62,9 @@ module Lapaz
       e << "Argument Error: no path given" unless opts[:path]
       h = opts.delete(:headers)
       b = opts.delete(:body)
+
       h.merge!(opts)
-      super({:kind=>'mongrel2',:headers=>h,:errors=>e,:body=>b})
+      super({:kind=>'mongrel2',:headers=>h,:errors=>e,:body=>{:mongrel_req_body=>b}})
     end
   end
 end

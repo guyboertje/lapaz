@@ -2,16 +2,9 @@
 # sudo port install zmq
 # sudo gem install zmq
 # RUBY_ENGINE = 'ruby'
-require 'rubygems'
-gem 'ffi-rzmq'
-gem 'json'
-require 'ffi-rzmq'
+
+require 'ffi-rzmq' unless defined?(ZMQ)
 require 'json'
-
-$: << File.dirname(__FILE__)
-require 'request'
-
-CTX = ZMQ::Context.new(1)
 
 module Mongrel2
   # A Connection object manages the connection between your handler
@@ -22,18 +15,19 @@ module Mongrel2
   # for simplicity since that'll be fairly common.
   class Connection
 
-    def initialize(sender_id, sub_addr, pub_addr)
-      @sender_id = sender_id
+    def initialize(cfg)
+      b = "#{cfg.scheme}://#{cfg.host}:#{PortPfx}"
+      @sub_addr = b + cfg.req_port
+      @pub_addr = b + cfg.rep_port
+      @sender_id = cfg.sender_id
+      @ctx = cfg.ctx
 
-      @reqs = CTX.socket(ZMQ::UPSTREAM)
-      @reqs.connect(sub_addr)
+      @reqs = @ctx.socket(ZMQ::UPSTREAM)
+      @reqs.connect(@sub_addr)
 
-      @resp = CTX.socket(ZMQ::PUB)
-      @resp.connect(pub_addr)
-      @resp.setsockopt(ZMQ::IDENTITY, sender_id)
-
-      @sub_addr = sub_addr
-      @pub_addr = pub_addr
+      @resp = @ctx.socket(ZMQ::PUB)
+      @resp.connect(@pub_addr)
+      @resp.setsockopt(ZMQ::IDENTITY, @sender_id)
     end
 
     # Receives a raw Request object that you
@@ -81,6 +75,11 @@ module Mongrel2
     # browser gets them.
     def reply_http(req, body, code=200, headers={})
       self.reply(req, http_response(body, code, headers))
+    end
+
+    def reply_http_resp(uuid, conn_id, body, code=200, headers={})
+      #puts body.inspect
+      self.send_resp(uuid, conn_id, http_response(body, code, headers))
     end
 
     # This lets you send a single message to many currently
