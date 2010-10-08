@@ -53,15 +53,16 @@ module Lapaz
         end
         @connection = cfg.conn
       end
+
       def pull()
         h = {}
-        puts "waiting......"
+        #puts "waiting......"
         lapazcfg.mongrel(LpzEnv).conn.recv do |req|
           h = req.to_hash
         end
         msg = Lapaz::MongrelMessage.new(h)
         msg.headers[:iter_id] = ::UUID.generate
-        puts "mongrel message received: #{msg}"
+        #puts "mongrel message received: #{msg}"
         {:message=>msg, :topic=>nil}
       end
     end

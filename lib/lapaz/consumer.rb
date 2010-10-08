@@ -18,7 +18,7 @@ module Lapaz
       def push(msg)
         path = msg.headers['PATH']
         lapaz_route = @app.path_handler.handle(path)
-        lap = lapaz_route.delete(:lapaz_path)
+        lap = lapaz_route.delete(:lapaz_route)
         msg.add_to :headers,lapaz_route
         r,s,m = lap.split('/',3)
         q_able = Queueable.new(r,s,m)
@@ -44,6 +44,8 @@ module Lapaz
 
       def work(msg)
         #this will eventually be rendered
+        return msg unless msg.body[:mongrel_resp_body].nil?
+
         msg.add_to :body, {:mongrel_resp_body=>"<pre>#{msg.inspect}</pre>"}
       end
     end

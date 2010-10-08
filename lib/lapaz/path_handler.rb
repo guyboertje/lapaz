@@ -11,21 +11,24 @@ module Lapaz
     end
 
     def build(opts = nil, &blk)
-      url_pattern, lapaz_route = opts.values_at(:url_pattern, :lapaz_route)
-      @usher.add_route(url_pattern).to(:lapaz => lapaz_route, :block => blk)
+      o = opts.dup
+      url_pattern = o.delete(:url_pattern)
+      o[:view_template] ||= ''
+      o[:view_layout] ||= ''
+      o[:block] = blk
+      @usher.add_route(url_pattern).to(o)
     end
 
     def handle(request_path)
       response = @usher.recognize_path(request_path.strip)
       if response
-        blk = response.path.route.destination[:block]
-        lap = response.path.route.destination[:lapaz]
-        prm = response.params.inject({}){|h,(k,v)| h[k]=v; h}
-        ret = {:lapaz_path => lap, :path_params =>prm}
+        ret = response.path.route.destination.dup
+        blk = ret.delete(:block)
+        ret[:path_params] = response.params.inject({}){|h,(k,v)| h[k]=v; h}
         if blk
           blk.call(ret)
         else
-          puts "handler found: #{ret.inspect}"
+          #puts "handler found: #{ret.inspect}"
           ret
         end
       else

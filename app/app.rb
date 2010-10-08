@@ -6,21 +6,23 @@ class App < Lapaz::Router
   include Lapaz::Consumer
 
   def setup_routes
-    puts "---"
+    #puts "---"
     add_route from(NullProducer,{:route_name=>"purchases",:seq_id=>0}).
               to(Purchases,{:seq_id=>1,:name=>'start'}).
               to(Contacts,{:seq_id=>2,:mux_id=>'2.1'}).
               to(StockItems,{:seq_id=>2,:mux_id=>'2.2'}).
-              to(MongrelConsumer,{:seq_id=>3})
-    puts "---"
+              to(TemplateRenderer,{:seq_id=>3}).
+              to(LayoutRenderer,{:seq_id=>4}).
+              to(MongrelConsumer,{:seq_id=>5})
+    #puts "---"
     add_route from(MongrelReceiver,{:route_name=>"mongrel_test",:seq_id=>0}).
               to(MongrelForwarder,{:seq_id=>1})
-    puts "---"
-#    add_route from(ErroredMessageReceiver,{:route_name=>"errors",:seq_id=>0}).
-#              to(MongrelConsumer,{:seq_id=>1,:name=>'mongrel'})
-#    puts "---"
+    #puts "---"
+    add_route from(ErroredMessageReceiver,{:route_name=>"errors",:seq_id=>0}).
+              to(MongrelConsumer,{:seq_id=>1,:name=>'mongrel'})
+    #puts "---"
     define_handlers do |handler|
-      handler.build :url_pattern =>'/handlertest/purchases/:id', :lapaz_route => 'purchases/start'
+      handler.build :url_pattern =>'/handlertest/purchases/:id', :lapaz_route => 'purchases/start', :view_template=>'purchases.erb', :view_layout=>'default.erb'
     end
 
   end
@@ -38,7 +40,7 @@ end
               to(Forwarder,{:seq_id=>2, :forward_to=>'parallel_test', :forward_at=>'purchase'})
 
     o2 = {:route_name=>"yaml_test",:seq_id=>0}
-    o2[:filename] = "/home/gb/dev/lapaz/lib/test.yml"
+    o2[:filename] = "/home/gb/dev/lapaz/lib/samples/test.yml"
     add_route from(YamlFileProducer,o2).
               to(YamlProcessor,{:seq_id=>1}).
               to(Stdout,{:seq_id=>2})

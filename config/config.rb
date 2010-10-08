@@ -9,6 +9,10 @@ lapazcfg.app(LpzEnv) do |cfg|
   cfg.int_endpt = b + cfg.int_port
 end
 
+vfolder = File.join(AppDir,"views")
+
+lapazcfg.app_views = LpzEnv, {:folder=>vfolder,:default_engine=>"erubis"}
+
 #db = nil
 #lapazcfg.mongo = LpzEnv, {:host=>"127.0.0.1",:port=>"7037",:db=>"lapaz_md",:con_cfg=>{:pool_size => 5, :timeout => 3.0},:con=>nil, :db=>nil}
 #lapazcfg.mongo(LpzEnv) do |cfg|
@@ -18,4 +22,4 @@ end
 
 # populate the db
 
-[:INT, :TERM].each { |sig| trap(sig){ lapazcfg.app(LpzEnv).ctx.terminate } }
+#[:INT, :TERM].each { |sig| trap(sig){ lapazcfg.app(LpzEnv).ctx.terminate } }

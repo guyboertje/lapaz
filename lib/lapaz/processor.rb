@@ -4,6 +4,47 @@ module Lapaz
       def producer?; false; end
       def consumer?; false; end
     end
+
+    class TemplateRenderer < Lapaz::Component
+      include Base
+
+      def work(msg)
+
+        path = msg.headers.delete(:view_template)
+        path = File.join(lapazcfg.app_views(LpzEnv).folder,path)
+        #cache this
+        template = Tilt.new(path)
+        puts "#{@route_name} #{@seq_id} doing some work.--."
+        b = template.render(msg)
+        msg.body[:mongrel_resp_body] = b
+        msg
+      rescue => e
+        esrc = @sub_topic
+        msg.add_to :errors, {:error_source=>esrc, :error_message=>e.message}
+      end
+    end
+
+    class LayoutRenderer < Lapaz::Component
+      include Base
+
+      def work(msg)
+
+        path = msg.headers.delete(:view_layout) || 'default.erb'
+        puts "#{@route_name} #{@seq_id} doing some work.--."
+        path = File.join(lapazcfg.app_views(LpzEnv).folder,path)
+
+        #cache this
+        template = Tilt.new(path)
+        puts path.inspect
+        b = template.render(){msg.body[:mongrel_resp_body]}
+        msg.body[:mongrel_resp_body] = b
+        msg
+      rescue => e
+        esrc = @sub_topic
+        msg.add_to :errors, {:error_source=>esrc, :error_message=>e.message}
+      end
+    end
+
     class YamlProcessor < Lapaz::Component
       include Base
       def work(msg)
@@ -65,3 +106,10 @@ module Lapaz
     end
   end
 end
+=begin
+:purchases=>[{"id"=>"1234-DSF", "contact_id"=>"886644", "stock_id"=>"4521", "notes"=>"rest of purchase object here"}]
+
+:stock_items=>[{"id"=>"4521", "name"=>"Widget X", "price"=>45.21, "ccy"=>"EUR", "notes"=>"rest of stock object here"}]
+
+:contacts=>[{"id"=>"886644", "name"=>"Bob Smith", "age"=>32, "notes"=>"rest of contact object here"}]
+=end

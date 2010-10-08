@@ -40,7 +40,7 @@ module Lapaz
         end
         sock.send_string(q_object.topic, ZMQ::SNDMORE) #TOPIC
         sock.send_string(q_object.msg) #BODY
-        puts "->>#{q_object.topic}"
+        #puts "->>#{q_object.topic}"
       end
 
       def run()

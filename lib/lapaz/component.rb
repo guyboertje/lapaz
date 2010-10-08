@@ -48,12 +48,12 @@ module Lapaz
       end
     end
     DEMUX_RE = /.+\/[0-9]+\/([0-9]+)\.([0-9]+)/
-    attr_reader :sub_sock, :route_name, :seq_id, :mux_id, :workunit, :loop_once, :name, :pub_to, :pub_at
+    attr_reader :app, :sub_sock, :route_name, :seq_id, :mux_id, :workunit, :loop_once, :name, :pub_to, :pub_at
 
-    #:app,
+    #
     def initialize(opts)
       @seq_id, @name, @mux_id, @route_name = opts.values_at(:seq_id, :name, :mux_id, :route_name)
-      puts "#{@route_name} #{@seq_id} >"
+      #puts "#{@route_name} #{@seq_id} >"
       @workunit, @forward_to, @forward_at = opts.values_at(:work, :forward_to, :forward_at)
       @loop_once = opts[:loop_once] || false
       @sub_topic = "#{@route_name}/#{@seq_id}"
@@ -94,6 +94,7 @@ module Lapaz
       # This and the callable should return the message for
       # the Lapaz::Message merge method or nil
       # header hash, body hash, errors array, warnings array.
+      puts "#{@route_name} #{@seq_id} doing some work......"
       @workunit.respond_to?(:call) ? @workunit.call(msg) : msg
     end
 
@@ -142,10 +143,6 @@ module Lapaz
       q_msg.msg = menc
       @app.enqueue(q_msg)
       msg
-    rescue => e
-      puts "???#{to_hash.inspect}"
-      puts "!#{e.inspect}"
-      puts "backtrace::::: #{e.backtrace}"
     end
 
     def process(msg)
@@ -163,13 +160,16 @@ module Lapaz
       topic = @sub_sock.recv_string
       body  = @sub_sock.more_parts? ? @sub_sock.recv_string : nil
       msge = Lapaz::DefaultMessage.new(body ? BERT.decode(body) : {}).merge!(msg)
-      puts "<<-#{topic}"
+      #puts "<<-#{topic}"
       {:message=>msge,:topic=>topic}
-    rescue => e
-      puts "???#{to_hash.inspect}"
-      puts "!#{e.inspect}"
-      puts "backtrace::::: #{e.backtrace}"
     end
 
   end
 end
+=begin
+    rescue => e
+      puts "???#{to_hash.inspect}"
+      puts "!#{e.inspect}"
+      puts "backtrace::::: #{e.backtrace}"
+      {:message=>nil,:topic=>""}
+=end
