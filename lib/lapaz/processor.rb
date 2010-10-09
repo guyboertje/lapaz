@@ -23,12 +23,14 @@ module Lapaz
         end
       end
     end
+
     class Renderer < Base
       def initialize(opts)
         super
         @cache = TmplCache.new
       end
     end
+
     class TemplateRenderer < Renderer
       def work(msg)
         path = msg.headers.delete(:view_template)
@@ -88,6 +90,7 @@ module Lapaz
         msg
       end
     end
+
     class Purchases < Tester
       def work(msg)
         super
@@ -95,12 +98,14 @@ module Lapaz
         msg.add :body,{:purchases=>pch}
       end
     end
+
     class Contacts  < Tester
       def work(msg)
         super
         msg.add :body,{:contacts=>[{'id'=>'886644','name'=>'Bob Smith','age'=>32,'notes'=>'rest of contact object here'}]}
       end
     end
+
     class StockItems < Tester
       def work(msg)
         super
