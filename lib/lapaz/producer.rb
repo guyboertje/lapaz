@@ -5,9 +5,14 @@ module Lapaz
       def consumer?; false; end
       # pull should return a hash with contents for sub topic and body
       # but for producers, first in line, there is no sub topic
-      def pull(msg = Lapaz::DefaultMessage.new)
+      def pull(msg,skt)
+        msg = Lapaz::DefaultMessage.new unless msg
         msg.headers[:iter_id] = ::UUID.generate
-        super msg
+        super(msg,skt)
+      end
+      def postamble(msg)
+        msg.headers[:iter_id] = ::UUID.generate
+        {:message=>msg,:topic=>'NULL'}
       end
     end
 
@@ -17,13 +22,14 @@ module Lapaz
         super
       end
 
-      def pull(msg = Lapaz::DefaultMessage.new(:kind=>'file_contents'))
+      def pull(msg,skt)
+        msg = Lapaz::DefaultMessage.new(:kind=>'file_contents') unless msg
         b = ""
         File.open(@filename) do |f|
           b = f.read
         end
         msg.body[:file_contents] = b
-        super(msg)
+        postamble msg
       end
     end
 
@@ -34,36 +40,23 @@ module Lapaz
       end
     end
 
-    class TestProducer < Base
-      def initialize(opts); super; @loop_once = true; end
-      def work(msg)
-        msg.add_to :body,{:request => {'action'=>'GET','path'=>'purchases/purchase','params'=>{'id'=>'1234-DSF'}}}
-      end
-    end
-
-    NullProducer = Class.new(Base)
-    ErroredMessageReceiver = Class.new(Base)
-
     class MongrelReceiver < Base
       def initialize(opts)
         super
-        cfg = lapazcfg.mongrel(LpzEnv)
+        cfg = lapazcfg.mongrel
         unless cfg.conn
           cfg.conn = Mongrel2::Connection.new(cfg)
         end
         @connection = cfg.conn
       end
 
-      def pull()
+      def pull(msg,skt)
         h = {}
-        #puts "waiting......"
-        lapazcfg.mongrel(LpzEnv).conn.recv do |req|
+        lapazcfg.mongrel.conn.recv do |req|
           h = req.to_hash
         end
         msg = Lapaz::MongrelMessage.new(h)
-        msg.headers[:iter_id] = ::UUID.generate
-        #puts "mongrel message received: #{msg}"
-        {:message=>msg, :topic=>nil}
+        postamble msg
       end
     end
 

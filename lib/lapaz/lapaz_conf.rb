@@ -6,26 +6,21 @@ class LapazConf
   include Singleton
   def initialize
     @nss = Struct.new(:key,:name,:struct,:value)
-    @envs = {}
-    @store = []
+    @store = {}
   end
+
+  def __slice__(slice)
+    @store.store(slice,{}) unless @store.has_key?(slice)
+    @_slice = slice
+  end
+
   def method_missing sym, *args, &block
-    env = :devl
-    ret = hash = idx = nil
+    ret = hash = nil
     save = !!(sym.to_s =~ /.+=$/)
-    args.flatten! if args.size == 1 && args.first.kind_of?(Array)
-    while !!(arg=args.shift) do
-      if arg.kind_of?(Hash) #saving the hash
-        hash = arg
-      elsif arg.kind_of?(String) || arg.kind_of?(Symbol) #explicit environment
-        env = arg.to_sym
-      end
+    arg = args.first
+    if arg.kind_of?(Hash) #saving the arg
+      hash = arg
     end
-    unless @envs.has_key?(env)
-      idx = @envs[env] = @store.size
-      @store << {}
-    end
-    idx = @envs[env]
     if save && hash
       k = hash.keys
       sym = sym.to_s[0..-2]
@@ -33,10 +28,10 @@ class LapazConf
       sym = sym.to_sym
       ns = @nss.new(sym, cls_name, Struct.new(name,*k))
       ns.value = ns.struct.new(*hash.values_at(*k))
-      @store[idx][sym] = ns
+      @store[@_slice][sym] = ns
     end
-    if @store[idx].has_key?(sym)
-      ret = @store[idx][sym].value
+    if @store[@_slice].has_key?(sym)
+      ret = @store[@_slice][sym].value
       block.call(ret) if block
     end
     ret
@@ -46,14 +41,9 @@ end
 # core extentions
 
 module Kernel
-  def lapazcfg
-    LapazConf.instance
+  def lapazcfg(slice='default')
+    inst = LapazConf.instance
+    inst.__slice__(slice)
+    inst
   end
 end
-
-class Hash
-  def to_struct(name)
-    Struct.new(name,*keys).new(*values)
-  end
-end
-

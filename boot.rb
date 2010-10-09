@@ -25,7 +25,7 @@ AppDir = File.join(root_dir,'app')
 
 require File.join('lapaz','lapaz_conf')
 
-%W(thread rubygems ffi-rzmq bert yaml uuid usher erubis tilt).each {|lib| require lib }
+%W(thread rubygems ffi-rzmq bert yaml uuid blockenspiel usher erubis tilt).each {|lib| require lib }
 # mongo
 
 Tilt.register 'erb', Tilt::ErubisTemplate
@@ -33,5 +33,3 @@ Tilt.register 'erb', Tilt::ErubisTemplate
 require 'config'
 require 'lapaz'
 require 'app'
-
-App.start("test_app")

@@ -29,7 +29,7 @@ module Lapaz
     class MongrelConsumer < Base
       def initialize(opts)
         super
-        cfg = lapazcfg.mongrel(LpzEnv)
+        cfg = lapazcfg.mongrel
         unless cfg.conn
           cfg.conn = Mongrel2::Connection.new(cfg)
         end
@@ -38,14 +38,12 @@ module Lapaz
         sender = msg.headers[:sender]
         cid = msg.headers[:conn_id]
         body = msg.body[:mongrel_resp_body]
-        lapazcfg.mongrel(LpzEnv).conn.reply_http_resp(sender, cid, body)
+        lapazcfg.mongrel.conn.reply_http_resp(sender, cid, body)
         msg
       end
 
       def work(msg)
-        #this will eventually be rendered
         return msg unless msg.body[:mongrel_resp_body].nil?
-
         msg.add_to :body, {:mongrel_resp_body=>"<pre>#{msg.inspect}</pre>"}
       end
     end

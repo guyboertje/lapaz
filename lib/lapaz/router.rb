@@ -5,6 +5,8 @@ module Lapaz
       ComponentNotFoundException = Class.new(StandardError)
       ProducerComponentNotAllowed = Class.new(StandardError)
 
+      include Blockenspiel::DSL
+
       attr_reader :name, :app, :named_steps
 
       def initialize(opts,app)
@@ -17,21 +19,7 @@ module Lapaz
         @named_steps = {}
       end
 
-      def from(component)
-        raise ComponentNotFoundException unless component.kind_of?(Lapaz::Component)
-        @chain.push(component)
-        @named_steps[component.name] = component.seq_id if component.name
-        self
-      end
-
-      def to(cls,opts)
-        component = cls.new(@opts.merge(opts))
-        raise ComponentNotFoundException unless component.kind_of?(Lapaz::Component)
-        raise ProducerComponentNotAllowed if component.kind_of?(Lapaz::Producer)
-        @chain.push(component)
-        @named_steps[component.name] = component.seq_id if component.name
-        self
-      end
+      dsl_methods false
 
       def publish(sock,q_object)
         raise "In route: #{self.name}, cannot find a step named: #{q_object.name}" if q_object.named? && !@named_steps.has_key?(q_object.name)
@@ -53,19 +41,39 @@ module Lapaz
       def inspect
         @chain.inspect
       end
+
       alias :to_s :inspect
+
+      dsl_methods true
+
+      def from(cls,opts)
+        component = cls.new(@opts.merge(opts))
+        raise ComponentNotFoundException unless component.kind_of?(Lapaz::Component)
+        @chain.push(component)
+        @named_steps[component.name] = component.seq_id if component.name
+      end
+
+      def to(cls,opts)
+        component = cls.new(@opts.merge(opts))
+        raise ComponentNotFoundException unless component.kind_of?(Lapaz::Component)
+        raise ProducerComponentNotAllowed if component.producer?
+        @chain.push(component)
+        @named_steps[component.name] = component.seq_id if component.name
+      end
     end
 
     class Router
+      include Blockenspiel::DSL
       attr_reader :path_handler, :name
       def initialize(name)
         @name = name
         @routes ||= {}
         @path_handler = PathHandler.new
         @queue = Queue.new
-
         puts "... #{name} ..."
       end
+
+      dsl_methods false
 
       def enqueue(q_object)
         #puts q_object.inspect
@@ -78,44 +86,36 @@ module Lapaz
         @routes[route_name].publish(@pub_sock, q_object)
       end
 
-      def define_handlers
-        yield @path_handler
-      end
-
-      def setup_routes(&block)
-        raise "Subclass this"
-      end
-
-      def from(cls,opts)
-        Route.new(opts, self).from(cls.new(opts))
-      end
-
-      def add_route(built_route)
-        @routes[built_route.name] = built_route
-        #puts "added #{built_route.inspect}"
-      end
-      alias :add :add_route
-
       def run()
-
         @routes.values.collect do |r|
           Thread.new { r.run() }
         end.each{|thread| thread.join}
 
-        @pub_sock = lapazcfg.app(LpzEnv).ctx.socket(ZMQ::PUB)
-        @pub_sock.bind lapazcfg.app(LpzEnv).int_endpt
+        @pub_sock = lapazcfg.app.ctx.socket(ZMQ::PUB)
+        @pub_sock.bind lapazcfg.app.int_endpt
 
         loop do
           publish @queue.pop
         end
       end
 
-      def self.start(name)
-        router = new(name)
-        router.setup_routes
-        router.run()
+      def self.application(name,&block)
+        app = new(name)
+        Blockenspiel.invoke(block, app)
+        app
       end
 
+      dsl_methods true
+
+      def route opts, &block
+        name = opts[:route_name]
+        @routes[name] = Route.new(opts,self)
+        Blockenspiel.invoke(block, @routes[name])
+      end
+
+      def url_handlers &block
+        Blockenspiel.invoke(block, @path_handler)
+      end
 
     end
   end

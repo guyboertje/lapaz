@@ -1,36 +1,36 @@
 Thread.abort_on_exception = true
 
-class App < Lapaz::Router
-  include Lapaz::Producer
-  include Lapaz::Processor
-  include Lapaz::Consumer
+include Lapaz
 
-  def setup_routes
-    #puts "---"
-    add_route from(NullProducer,{:route_name=>"purchases",:seq_id=>0}).
-              to(Purchases,{:seq_id=>1,:name=>'start'}).
-              to(Contacts,{:seq_id=>2,:mux_id=>'2.1'}).
-              to(StockItems,{:seq_id=>2,:mux_id=>'2.2'}).
-              to(TemplateRenderer,{:seq_id=>3}).
-              to(LayoutRenderer,{:seq_id=>4}).
-              to(MongrelConsumer,{:seq_id=>5})
-    #puts "---"
-    add_route from(MongrelReceiver,{:route_name=>"mongrel_test",:seq_id=>0}).
-              to(MongrelForwarder,{:seq_id=>1})
-    #puts "---"
-    add_route from(ErroredMessageReceiver,{:route_name=>"errors",:seq_id=>0}).
-              to(MongrelConsumer,{:seq_id=>1,:name=>'mongrel'})
-    #puts "---"
-    define_handlers do |handler|
-      handler.build :url_pattern =>'/handlertest/purchases/:id', :lapaz_route => 'purchases/start', :view_template=>'purchases.erb', :view_layout=>'default.erb'
-    end
+app = Lapaz::Router.application('test_app') do
 
+  route(:route_name=>"purchases") do
+    from Processor::Purchases, {:seq_id=>0,:name=>'start'}
+      to Processor::Contacts,{:seq_id=>1,:mux_id=>'2.1'}
+      to Processor::StockItems,{:seq_id=>1,:mux_id=>'2.2'}
+      to Processor::TemplateRenderer,{:seq_id=>2}
+      to Processor::LayoutRenderer,{:seq_id=>3}
+      to Consumer::MongrelConsumer,{:seq_id=>4}
   end
+
+  route(:route_name=>"mongrel_test") do
+    from Producer::MongrelReceiver,{:seq_id=>0}
+    to   Consumer::MongrelForwarder,{:seq_id=>1}
+  end
+
+  route(:route_name=>"errors") do
+    from Processor::TemplateRenderer,{:seq_id=>0,:name=>'mongrel}
+      to Consumer::MongrelConsumer,{:seq_id=>1'}
+  end
+
+  url_handlers do
+    unrecognized { {:lapaz_route => 'errors/mongrel', :view_template=>'url_unrecgnized.erb', :view_layout=>nil} }
+    build :url_pattern =>'/handlertest/purchases/:id', :lapaz_route => 'purchases/start', :view_template=>'purchases.erb', :view_layout=>'default.erb'
+  end
+
 end
 
-
-
-
+app.run()
 
 
 =begin

@@ -50,7 +50,6 @@ module Lapaz
     DEMUX_RE = /.+\/[0-9]+\/([0-9]+)\.([0-9]+)/
     attr_reader :app, :sub_sock, :route_name, :seq_id, :mux_id, :workunit, :loop_once, :name, :pub_to, :pub_at
 
-    #
     def initialize(opts)
       @seq_id, @name, @mux_id, @route_name = opts.values_at(:seq_id, :name, :mux_id, :route_name)
       #puts "#{@route_name} #{@seq_id} >"
@@ -61,28 +60,34 @@ module Lapaz
       @pub_at = @forward_at || @seq_id.next
       @collator = {}
     end
+
+    def producer?; false; end
+    def consumer?; false; end
+
     def to_hash
       {:route_name=>@route_name, :seq_id=>@seq_id, :mux_id=>@mux_id, :sub_topic=>@sub_topic}
     end
     def make_sub_socket
-      @sub_sock = lapazcfg.app(LpzEnv).ctx.socket(ZMQ::SUB)
-      #puts self.to_hash.inspect
-      @sub_sock.setsockopt(ZMQ::SUBSCRIBE,@sub_topic)
-      @sub_sock.connect lapazcfg.app(LpzEnv).int_endpt
+      sub_sock = lapazcfg.app.ctx.socket(ZMQ::SUB)
+      sub_sock.setsockopt(ZMQ::SUBSCRIBE,@sub_topic)
+      sub_sock.connect lapazcfg.app.int_endpt
+      sub_sock
     end
     def run(app)
       @app = app
       th = Thread.new do
-        make_sub_socket()
+        sock = make_sub_socket()
         begin
           loop do
-            msg = conveyor()
+            msg = conveyor(sock)
             break if loop_once || (msg && msg.headers[:stop_this_route] == @route_name)
           end
         rescue => e
           puts "???#{to_hash.inspect}"
           puts "!#{e.inspect}"
           puts "backtrace::::: #{e.backtrace}"
+        ensure
+          sock.close
         end
       end
     end
@@ -98,8 +103,8 @@ module Lapaz
       @workunit.respond_to?(:call) ? @workunit.call(msg) : msg
     end
 
-    def conveyor
-      pulled = pull()
+    def conveyor(sock)
+      pulled = pull(nil,sock)
       msg,topic = pulled.values_at(:message,:topic)
       #looking for mux_id i.e.:
       #  2.1 total parallel messages 2 & this is the first message
@@ -156,9 +161,9 @@ module Lapaz
       m
     end
 
-    def pull(msg=nil)
-      topic = @sub_sock.recv_string
-      body  = @sub_sock.more_parts? ? @sub_sock.recv_string : nil
+    def pull(msg,sock)
+      topic = sock.recv_string
+      body  = sock.more_parts? ? sock.recv_string : nil
       msge = Lapaz::DefaultMessage.new(body ? BERT.decode(body) : {}).merge!(msg)
       #puts "<<-#{topic}"
       {:message=>msge,:topic=>topic}
@@ -166,10 +171,4 @@ module Lapaz
 
   end
 end
-=begin
-    rescue => e
-      puts "???#{to_hash.inspect}"
-      puts "!#{e.inspect}"
-      puts "backtrace::::: #{e.backtrace}"
-      {:message=>nil,:topic=>""}
-=end
+
