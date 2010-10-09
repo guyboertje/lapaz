@@ -99,7 +99,6 @@ module Lapaz
       # This and the callable should return the message for
       # the Lapaz::Message merge method or nil
       # header hash, body hash, errors array, warnings array.
-      puts "#{@route_name} #{@seq_id} doing some work......"
       @workunit.respond_to?(:call) ? @workunit.call(msg) : msg
     end
 

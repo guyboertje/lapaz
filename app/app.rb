@@ -19,12 +19,12 @@ app = Lapaz::Router.application('test_app') do
   end
 
   route(:route_name=>"errors") do
-    from Processor::TemplateRenderer,{:seq_id=>0,:name=>'mongrel}
-      to Consumer::MongrelConsumer,{:seq_id=>1'}
+    from Processor::TemplateRenderer,{:seq_id=>0,:name=>'mongrel'}
+      to Consumer::MongrelConsumer,{:seq_id=>1}
   end
 
   url_handlers do
-    unrecognized { {:lapaz_route => 'errors/mongrel', :view_template=>'url_unrecgnized.erb', :view_layout=>nil} }
+    unrecognized { {:lapaz_route => 'errors/mongrel', :view_template=>'url_unrecognized.erb', :view_layout=>nil} }
     build :url_pattern =>'/handlertest/purchases/:id', :lapaz_route => 'purchases/start', :view_template=>'purchases.erb', :view_layout=>'default.erb'
   end
 

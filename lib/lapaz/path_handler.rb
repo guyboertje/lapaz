@@ -24,7 +24,7 @@ module Lapaz
           ret
         end
       else
-        @unrecognize_block ? @unrecognize_block.call(text) : {:lapaz_path => 'errors/mongrel', :path_params =>{}}
+        @unrecognize_block ? @unrecognize_block.call : {:lapaz_path => 'errors/mongrel', :path_params =>{}}
       end
     end
 
