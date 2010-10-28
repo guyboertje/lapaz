@@ -4,26 +4,64 @@
 #  lapazcfg('apollo').mongrel = {} and
 #  lapazcfg('hermes').mongrel = {}
 
-lapazcfg.mongrel = {:sender_id=>::UUID.generate,:scheme=>"tcp",:host=>"127.0.0.1",:req_port=>"9997",:rep_port=>"9996", :ctx=>ZMQ::Context.new(1), :conn=>nil}
+_ctx = ZMQ::Context.new(1)
+lapazcfg.mongrel = {:sender_id=>::UUID.generate,:scheme=>"tcp",:host=>"127.0.0.1",:req_port=>"9997",:rep_port=>"9996", :ctx=>_ctx, :conn=>nil}
 
-lapazcfg.app = {:scheme=>"tcp",:host=>"127.0.0.1",:int_port=>"4066",:ext_port=>"4068", :int_endpt=>"", :ext_endpt=>"", :ctx=>ZMQ::Context.new(1)}
+lapazcfg.ext = {:scheme=>"tcp",:host=>"127.0.0.1",:port=>"4040", :endpt=>"", :ctx=>_ctx}
+lapazcfg.ext do |cfg|
+  cfg.endpt = "#{cfg.scheme}://#{cfg.host}:#{PortPfx}#{cfg.port}"
+end
+
+#lapazcfg.ext = {:scheme=>"tcp",:host=>"127.0.0.1",:port=>"4066", :endpt=>"", :ctx=>_ctx}
+lapazcfg.app = {:scheme=>"inproc",:key=>"lapaz", :endpt=>"", :ctx=>_ctx}
 lapazcfg.app do |cfg|
-  b = "#{cfg.scheme}://#{cfg.host}:#{PortPfx}"
-  cfg.ext_endpt = b + cfg.ext_port
-  cfg.int_endpt = b + cfg.int_port
+  case cfg.scheme
+  when "tcp"
+    cfg.endpt = "#{cfg.scheme}://#{cfg.host}:#{PortPfx}#{cfg.port}"
+  when "inproc"
+    cfg.endpt = "#{cfg.scheme}://#{cfg.key}"
+  end
 end
 
 vfolder = File.join(AppDir,"views")
 
 lapazcfg.app_views = {:folder=>vfolder,:default_engine=>"erubis"}
 
-#db = nil
-#lapazcfg.mongo = {:host=>"127.0.0.1",:port=>"7037",:db=>"lapaz_md",:con_cfg=>{:pool_size => 5, :timeout => 3.0},:con=>nil, :db=>nil}
-#lapazcfg.mongo do |cfg|
-#  cfg.con = Mongo::Connection.new(cfg.host, (PortPfx + cfg.port).to_i, cfg.con_cfg)
-#  db = cfg.db = cfg.con.db("lapaz")
-#end
+db = nil
+lapazcfg.mongo = {:host=>"127.0.0.1",:port=>"7037",:db_name=>"lapaz_md",:con_cfg=>{:pool_size => 5, :timeout => 3.0},:con=>nil, :db=>nil}
+lapazcfg.mongo do |cfg|
+  cfg.con = Mongo::Connection.new(cfg.host, (PortPfx + cfg.port).to_i, cfg.con_cfg)
+  db = cfg.db = cfg.con.db(cfg.db_name)
+end
 
 # populate the db
+prices = [{'ccy_pair'=>'EURGBP','bid'=>'0.87330','offer'=>'0.87427'},{'ccy_pair'=>'GBPEUR','bid'=>'1.14381','offer'=>'1.14508'}]
+res = db.collection('prices').insert(prices)
+puts "Insert results: #{res.inspect}"
+
+purchase= {'id'=>'1234-DSF','contact_id'=>'886644','stock_id'=>'4521','notes'=>'rest of purchase object here'}
+res = db.collection('purchases').insert(purchase)
+puts "Insert results: #{res.inspect}"
+
+contact = {:contacts=>[{'id'=>'886644','name'=>'Bob Smith','age'=>32,'notes'=>'rest of contact object here'}
+res = db.collection('purchases').insert(contact)
+puts "Insert results: #{res.inspect}"
+
+stock = {'id'=>'4521','name'=>'Widget X','price'=>45.21,'ccy'=>'EUR','notes'=>'rest of stock object here'}
+res = db.collection('purchases').insert(stock)
+puts "Insert results: #{res.inspect}"
 
 #[:INT, :TERM].each { |sig| trap(sig){ lapazcfg.app.ctx.terminate } }
+
+
+
+
+
+
+
+
+
+
+
+
+
