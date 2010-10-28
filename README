@@ -1,0 +1,34 @@
+Lapaz is an asynchronous JRuby application framework using components supported by ZeroMQ, Mongrel 2
+and MongoDB.
+
+Lapaz is not finished.  It halfway through the beginning.
+
+Four unrelated projects happened.
+1) ZeroMQ
+2) MongoDB
+3) Llama
+4) Mongrel2
+
+Lapaz is inspired by Llama but takes the concept in a different direction using ZMQ for inter-component
+communication.  ZeroMQ (ZMQ) removed the broker intermediary and simplified multi-threaded communication.
+Mongrel2 went async using ZMQ to deliver requests to a handler and waiting for a reply.
+
+It can be used to build applications or parts of applications.
+
+Mongrel2 adds a HTTP accessibility to a Lapaz application.
+
+It is composed of components that communicate with each other.
+
+this is a section from a test application
+
+route(:route_name=>"purchases") do
+  from Processor::Purchases, {:seq_id=>0,:name=>'start'}
+  to Consumer::Forwarder,{:seq_id=>1,:forward_to=>'prices/start',:reply_to=>'purchases/render/3.3'}
+  to Processor::Contacts,{:seq_id=>1,:mux_id=>'3.1'}
+  to Processor::StockItems,{:seq_id=>1,:mux_id=>'3.2'}
+  to Processor::TemplateRenderer,{:seq_id=>2,:name=>'render'}
+  to Processor::LayoutRenderer,{:seq_id=>3}
+  to Consumer::MongrelConsumer,{:seq_id=>4}
+end
+
+...
