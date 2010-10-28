@@ -1,7 +1,7 @@
 Lapaz is an asynchronous JRuby application framework using components supported by ZeroMQ, Mongrel 2
 and MongoDB.
 
-Lapaz is not finished.  It halfway through the beginning.
+Lapaz is not finished.  It's halfway through the beginning.
 
 Four unrelated projects happened.
 1) ZeroMQ
