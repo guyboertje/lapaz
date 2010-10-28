@@ -21,6 +21,13 @@ module Lapaz
 
       dsl_methods false
 
+      def describe
+        ret = @chain.map do |comp|
+          comp.describe
+        end.flatten
+        ret
+      end
+
       def publish(sock,q_object)
         raise "In route: #{self.name}, cannot find a step named: #{q_object.name}" if q_object.named? && !@named_steps.has_key?(q_object.name)
         if q_object.named?
@@ -80,6 +87,13 @@ module Lapaz
         @queue << q_object
       end
 
+      def services
+        srvs = @routes.values.map do |r|
+          r.describe
+        end.flatten.compact
+        {:app => @name, :routes => srvs}
+      end
+
       def publish(q_object)
         route_name = q_object.route
         raise "Cannot find a route named: #{route_name}" unless @routes.has_key?(route_name)
@@ -87,12 +101,13 @@ module Lapaz
       end
 
       def run()
+
+        @pub_sock = lapazcfg.app.ctx.socket(ZMQ::PUB)
+        @pub_sock.bind lapazcfg.app.endpt
+
         @routes.values.collect do |r|
           Thread.new { r.run() }
         end.each{|thread| thread.join}
-
-        @pub_sock = lapazcfg.app.ctx.socket(ZMQ::PUB)
-        @pub_sock.bind lapazcfg.app.int_endpt
 
         loop do
           publish @queue.pop

@@ -2,6 +2,7 @@ module Lapaz
   class Message
     attr_accessor :body, :headers, :errors, :warnings
     attr_reader :kind
+
     def initialize(opts={})
       @headers = opts[:headers] || {}
       @body = opts[:body] || {}
@@ -9,12 +10,15 @@ module Lapaz
       @warnings = opts[:warnings] || []
       @kind = opts[:kind] || "base"
     end
+
     def has_header_key?(key)
       headers.has_key? key
     end
+
     def has_body_key?(key)
       body.has_key? key
     end
+
     def add_to(where, what)
       case where
       when :headers
@@ -41,6 +45,10 @@ module Lapaz
 
     def to_hash
       {:kind=>kind,:headers=>headers,:body=>body,:errors=>errors,:warnings=>warnings}
+    end
+
+    def to_json
+      to_hash.to_json
     end
     def inspect
       to_hash.inspect

@@ -33,22 +33,26 @@ module Lapaz
 
     class TemplateRenderer < Renderer
       def work(msg)
-        path = msg.headers.delete(:view_template)
-        path = File.join(lapazcfg.app_views.folder,path)
-        template = @cache.fetch(path) { Tilt.new(path) }
-        b = template.render(msg)
-        msg.body[:mongrel_resp_body] = b
-        msg
+        params = msg.headers[:path_params]
+        b = if params && params[:format] =~ /^js/
+              {:mongrel_http_body=>msg.to_json, :mime=>'json'}
+            else
+              path = msg.headers.delete(:view_template)
+              path = File.join(lapazcfg.app_views.folder,path)
+              template = @cache.fetch(path) { Tilt.new(path) }
+              {:mongrel_http_body=>template.render(msg), :mime=>'html'}
+            end
+        msg.add_to :body, b
       end
     end
 
     class LayoutRenderer < Renderer
       def work(msg)
+        return msg unless msg.body[:mime] == 'html'
         path = msg.headers.delete(:view_layout) || 'default.erb'
         path = File.join(lapazcfg.app_views.folder,path)
         template = @cache.fetch(path) { Tilt.new(path) }
-        b = template.render(){msg.body[:mongrel_resp_body]}
-        msg.body[:mongrel_resp_body] = b
+        msg.body[:mongrel_http_body] = template.render(){msg.body[:mongrel_http_body]}
         msg
       end
     end
@@ -77,12 +81,6 @@ module Lapaz
       end
     end
 
-    class MongoReader < Base
-      def work(msg)
-        #define
-      end
-    end
-
     class Tester < Base
       def work(msg)
             #simulate some work being done
@@ -91,11 +89,26 @@ module Lapaz
       end
     end
 
+    class Prices < Base
+      include Lapaz::Mongo::Accessor
+      def initialize(opts)
+        @collection = lapazcfg.mongo.db.collection(opts[:mongo_collection])
+      end
+      def work(msg)
+        super
+        find = {'ccy_pair'=>'EURGBP'}
+        prices = []
+        read(find).each do |doc|
+          prices << doc.to_hash
+        end
+        msg.add :body,{:prices=>prices}
+      end
+    end
+
     class Purchases < Tester
       def work(msg)
         super
-        pch = [{'id'=>'1234-DSF','contact_id'=>'886644','stock_id'=>'4521','notes'=>'rest of purchase object here'}]
-        msg.add :body,{:purchases=>pch}
+        msg.add :body,{:purchases=>[{'id'=>'1234-DSF','contact_id'=>'886644','stock_id'=>'4521','notes'=>'rest of purchase object here'}]}
       end
     end
 

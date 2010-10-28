@@ -2,75 +2,40 @@ Thread.abort_on_exception = true
 
 module Lapaz
   class Component
-    class Queueable
-      attr_reader :route,:name,:mux
-      attr_accessor :seq_id,:msg
-      def initialize(route,id,mux,msg=nil)
-        @route = route
-        if id.kind_of?(Integer)
-          @seq_id = id
-          @name = ''
-        else
-          @seq_id = 0
-          @name = id
-        end
-        @mux = mux
-        @msg = msg
-      end
-      def named?
-        !@name.empty?
-      end
-      def topic
-        a = [@route,@seq_id]
-        a << mux if mux && !mux.empty?
-        a.join('/')
-      end
-      def inspect
-        "route: #{@route}, name: #{@name}, mux: #{@mux}, seq_id: #{@seq_id}"
-      end
-    end
-    class Accumulator
-      attr_reader :count, :max
-      def initialize(msg,max)
-        @count = 1
-        @accumulator = msg
-        @max = max
-      end
-      def push(msg)
-        @accumulator.merge!(msg)
-        @count += 1
-      end
-      def max?
-        !(count < max)
-      end
-      def message
-        @accumulator
-      end
-    end
     DEMUX_RE = /.+\/[0-9]+\/([0-9]+)\.([0-9]+)/
     attr_reader :app, :sub_sock, :route_name, :seq_id, :mux_id, :workunit, :loop_once, :name, :pub_to, :pub_at
 
     def initialize(opts)
       @seq_id, @name, @mux_id, @route_name = opts.values_at(:seq_id, :name, :mux_id, :route_name)
       #puts "#{@route_name} #{@seq_id} >"
-      @workunit, @forward_to, @forward_at = opts.values_at(:work, :forward_to, :forward_at)
+      @workunit, @forward_to, @reply_to = opts.values_at(:work, :forward_to, :reply_to)
       @loop_once = opts[:loop_once] || false
       @sub_topic = "#{@route_name}/#{@seq_id}"
-      @pub_to = @forward_to || @route_name
-      @pub_at = @forward_at || @seq_id.next
+      if @forward_to
+        route,step,mux = @forward_to.split('/',3)
+        @pub_to = route
+        @pub_at = step
+        @mux_id = mux
+      else
+        @pub_to = @route_name
+        @pub_at = @seq_id.next
+      end
       @collator = {}
     end
 
     def producer?; false; end
     def consumer?; false; end
 
+    def describe
+      @name ? {:lapaz_route=>@route_name+"/"+@name} : nil
+    end
     def to_hash
       {:route_name=>@route_name, :seq_id=>@seq_id, :mux_id=>@mux_id, :sub_topic=>@sub_topic}
     end
     def make_sub_socket
       sub_sock = lapazcfg.app.ctx.socket(ZMQ::SUB)
       sub_sock.setsockopt(ZMQ::SUBSCRIBE,@sub_topic)
-      sub_sock.connect lapazcfg.app.int_endpt
+      sub_sock.connect lapazcfg.app.endpt
       sub_sock
     end
     def run(app)
@@ -141,9 +106,12 @@ module Lapaz
     end
 
     def push(msg,q_able=nil)
+      if @reply_to && @forward_to
+        msg.headers[:reply_to] = @reply_to
+      end
       menc = BERT.encode(msg.to_hash)
       q_msg = q_able || Queueable.new(@pub_to,@pub_at,@mux_id)
-      #puts "component push queueable: #{q_msg.inspect}"
+      puts "component push queueable: #{q_msg.inspect}"
       q_msg.msg = menc
       @app.enqueue(q_msg)
       msg
@@ -166,6 +134,54 @@ module Lapaz
       msge = Lapaz::DefaultMessage.new(body ? BERT.decode(body) : {}).merge!(msg)
       #puts "<<-#{topic}"
       {:message=>msge,:topic=>topic}
+    end
+
+
+    class Queueable
+      attr_reader :route,:name,:mux
+      attr_accessor :seq_id,:msg
+      def initialize(route,id,mux,msg=nil)
+        @route = route
+        if id.kind_of?(Integer)
+          @seq_id = id
+          @name = ''
+        else
+          @seq_id = 0
+          @name = id
+        end
+        @mux = mux
+        @msg = msg
+      end
+      def named?
+        !@name.empty?
+      end
+      def topic
+        a = [@route,@seq_id]
+        a << mux if mux && !mux.empty?
+        a.join('/')
+      end
+      def inspect
+        "route: #{@route}, name: #{@name}, mux: #{@mux}, seq_id: #{@seq_id}"
+      end
+    end
+
+    class Accumulator
+      attr_reader :count, :max
+      def initialize(msg,max)
+        @count = 1
+        @accumulator = msg
+        @max = max
+      end
+      def push(msg)
+        @accumulator.merge!(msg)
+        @count += 1
+      end
+      def max?
+        !(count < max)
+      end
+      def message
+        @accumulator
+      end
     end
 
   end

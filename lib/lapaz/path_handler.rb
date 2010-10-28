@@ -3,9 +3,9 @@ module Lapaz
   class PathHandler
 
     include Blockenspiel::DSL
-
+#:delimiters => ['/','.']
     def initialize(&blk)
-      @usher = Usher.new(:delimiters => ['/'])
+      @usher = Usher.new()
       instance_eval(&blk) if blk
     end
 

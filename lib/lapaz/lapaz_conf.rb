@@ -16,16 +16,14 @@ class LapazConf
 
   def method_missing sym, *args, &block
     ret = hash = nil
-    save = !!(sym.to_s =~ /.+=$/)
     arg = args.first
     if arg.kind_of?(Hash) #saving the arg
       hash = arg
     end
-    if save && hash
+    if sym.to_s =~ /(.+)=$/ && hash
       k = hash.keys
-      sym = sym.to_s[0..-2]
-      cls_name = sym.gsub(/\/(.?)/){"#{$1.upcase}"}.gsub(/(?:^|_)(.)/){$1.upcase} #convert to CamelCase
-      sym = sym.to_sym
+      sym = $1.to_sym
+      cls_name = $1.gsub(/\/(.?)/){"#{$1.upcase}"}.gsub(/(?:^|_)(.)/){$1.upcase} #convert to CamelCase
       ns = @nss.new(sym, cls_name, Struct.new(name,*k))
       ns.value = ns.struct.new(*hash.values_at(*k))
       @store[@_slice][sym] = ns

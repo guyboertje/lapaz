@@ -14,6 +14,18 @@ module Lapaz
 
     Forwarder = Class.new(Base)
 
+    class ReplyToForwarder < Base
+      def push(msg)
+        q_able = nil
+        if msg.headers.has_key?(:reply_to)
+          reply_to = msg.headers.delete(:reply_to)
+          r,s,m = reply_to.split('/',3)
+          q_able = Queueable.new(r,s,m)
+        end
+        super(msg,q_able)
+      end
+    end
+
     class MongrelForwarder < Base
       def push(msg)
         path = msg.headers['PATH']
@@ -35,17 +47,23 @@ module Lapaz
         end
       end
       def push(msg)
-        sender = msg.headers[:sender]
-        cid = msg.headers[:conn_id]
-        body = msg.body[:mongrel_resp_body]
-        lapazcfg.mongrel.conn.reply_http_resp(sender, cid, body)
+        sender,cid = msg.headers.values_at(:sender,:conn_id)
+        httpbody,httpheaders  = msg.body.values_at(:mongrel_http_body,:mongrel_http_hdrs)
+        lapazcfg.mongrel.conn.reply_http_resp(sender, cid, httpbody, 200, httpheaders)
         msg
       end
 
       def work(msg)
-        return msg unless msg.body[:mongrel_resp_body].nil?
-        msg.add_to :body, {:mongrel_resp_body=>"<pre>#{msg.inspect}</pre>"}
+        mime = (msg.body[:mime] == 'json') ? "application/json" : "text/html"
+        msg.body[:mongrel_http_hdrs] = {'Content-type'=>"#{mime}; charset=utf-8"}
+
+        return msg unless msg.body[:mongrel_http_body].nil?
+
+        msg.add_to :body, {:mongrel_http_body=>"<pre>#{msg.inspect}</pre>"}
       end
     end
   end
 end
+
+
+
