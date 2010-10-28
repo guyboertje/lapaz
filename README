@@ -3,6 +3,8 @@ and MongoDB.
 
 Lapaz is not finished.  It's halfway through the beginning.
 
+Why?
+
 Four unrelated projects happened.
 1) ZeroMQ
 2) MongoDB
@@ -10,16 +12,59 @@ Four unrelated projects happened.
 4) Mongrel2
 
 Lapaz is inspired by Llama but takes the concept in a different direction using ZMQ for inter-component
-communication.  ZeroMQ (ZMQ) removed the broker intermediary and simplified multi-threaded communication.
-Mongrel2 went async using ZMQ to deliver requests to a handler and waiting for a reply.
+communication.  ZeroMQ (ZMQ) removed the broker intermediary and simplified inter-thread communication.
+Mongrel2 went async using ZMQ to send requests to a handler and waiting for a reply.
 
-It can be used to build applications or parts of applications.
+What can I build with it?
 
-Mongrel2 adds a HTTP accessibility to a Lapaz application.
+It can be used to build applications or parts of applications that occur asynchronously or are
+functionally decomposable.
 
-It is composed of components that communicate with each other.
+For example:
+A price update receiver - price updates received from a message bus and are saved to a Mongo DB.
+A notification server - receives a message and signals a third party via a webservice.
 
-this is a section from a test application
+Mongrel2 adds HTTP accessibility to a Lapaz application primarily to serve client side javascript apps.
+
+How does it work?
+
+It is composed of components that communicate with each other. Components are assembled in a route,
+more like a directional acyclic graph actually with messages flowing from the starting step through
+the paths of the route.  A group of routes make up an application.
+
+Each component has three pieces -
+pull: subscribes to messages addressed to it,
+process: process the pulled message,
+push: publish the processed message to the next component.
+
+Specialised components redefine one or more of the above pieces.
+
+A Producer will redefine the pull component and produce internal messages from an external source.
+Producer examples are: a MongrelProducer that receives messages from a browser via Mongrel2,
+XmppProducer, RabbitMQProducer.  A Producer creates a new message with an iteration id.
+
+A Processor will redefine the process piece - typically augmenting the pulled message in some way.
+Processor exampes are: a TemplateRenderer that will use the message and a template to render HTML,
+DbReader, DbWriter, YamlParser.
+
+A Consumer will redefine the push piece and send a (transformed) message to an external target or
+a named step in another route.
+Consumer examples are: a MongrelConsumer that sends a response to Mongrel2, RabbitMQConsumer,
+SysLogConsumer, XmppConsumer, StdOut, EmailSender.
+
+A Route is a sequence of components arranged in steps 0 to N. One component is at step 0, typically.
+Multiple components can be in a step - they receive and process messages in parallel (multiplex).
+
+Any component can demultiplex messages addressed to it and will accumulate messages until the last
+message is received. Accumulation is grouped by iteration id. When the last message is received they
+are merged together and published to the next step.  Multiplexed messages are identified by a
+mux id, e.g. 5.3 meaning - expect to accumulate five messages and this is the third (which may be
+received before the second or first message).
+
+Forwarding consumers can publish a message to a named step in another route.
+
+This is a route from a test application. This route has no Producers at step 0 so by subscribing to
+the topic "purchases/0" it waits for a message.
 
 route(:route_name=>"purchases") do
   from Processor::Purchases, {:seq_id=>0,:name=>'start'}
@@ -31,4 +76,14 @@ route(:route_name=>"purchases") do
   to Consumer::MongrelConsumer,{:seq_id=>4}
 end
 
-...
+TODO:
+
+Multicast Publish and Subscribe for service discovery and inter-app messaging.
+Cascade demultiplexing.
+Add more components: RabbitMQ, Syslogger.
+ZMQ request/reply entry point for synchronous peers (Rails, Sinatra) with a driver.
+Sammy.js based client app taking JSON from Mongrel2.
+Compensate, or how to reverse a previous steps state change when something goes wrong.
+HTTP streaming when availble in Mongrel2.
+
+More to follow...

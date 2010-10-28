@@ -71,9 +71,10 @@ module Lapaz
       pulled = pull(nil,sock)
       msg,topic = pulled.values_at(:message,:topic)
       #looking for mux_id i.e.:
-      #  2.1 total parallel messages 2 & this is the first message
-      #  5.5 total 5 & this is the fifth
+      #  2.1 means accumulate 2 messages& this is the first message
+      #  5.5 means accumulate 5 & this is the fifth
       #  can arrive in any order
+      #  message acculate keyed by iteration id
 
       demux_match = DEMUX_RE.match(topic)
       return push(process(msg)) unless demux_match
