@@ -41,7 +41,7 @@ module Lapaz
       def run()
         @chain.reverse.each{|component|
           component.run(app)
-          sleep 0.2
+          sleep 0.25
         }
       end
 

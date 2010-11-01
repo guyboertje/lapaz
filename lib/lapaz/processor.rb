@@ -89,10 +89,11 @@ module Lapaz
       end
     end
 
-    class Prices < Base
-      include Lapaz::Mongo::Accessor
+    class Prices < Tester
+      include Lapaz::Mongo::Reader
       def initialize(opts)
-        @collection = lapazcfg.mongo.db.collection(opts[:mongo_collection])
+        @collection = lapazcfg.mongo.db.collection(opts.delete(:mongo_collection))
+        super
       end
       def work(msg)
         super

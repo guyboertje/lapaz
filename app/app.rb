@@ -15,13 +15,13 @@ app = Lapaz::Router.application('test_app') do
   end
 
   route(:route_name=>"prices") do
-    from Processor::Prices, {:seq_id=>0,:name=>'start'}
+    from Processor::Prices, {:seq_id=>0,:name=>'start',:mongo_collection=>'prices'}
     to Consumer::ReplyToForwarder,{:seq_id=>1}
   end
 
   route(:route_name=>"mongrel_test") do
     from Producer::MongrelReceiver,{:seq_id=>0}
-    to   Consumer::MongrelForwarder,{:seq_id=>1}
+      to Consumer::MongrelForwarder,{:seq_id=>1}
   end
 
   route(:route_name=>"errors") do

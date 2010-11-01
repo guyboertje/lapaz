@@ -32,16 +32,15 @@ module Lapaz
     def to_hash
       {:route_name=>@route_name, :seq_id=>@seq_id, :mux_id=>@mux_id, :sub_topic=>@sub_topic}
     end
-    def make_sub_socket
-      sub_sock = lapazcfg.app.ctx.socket(ZMQ::SUB)
-      sub_sock.setsockopt(ZMQ::SUBSCRIBE,@sub_topic)
-      sub_sock.connect lapazcfg.app.endpt
-      sub_sock
+    def make_sub_socket sock
+      sock.setsockopt(ZMQ::SUBSCRIBE,@sub_topic)
+      sock.connect lapazcfg.app.endpt
+      sock
     end
     def run(app)
       @app = app
       th = Thread.new do
-        sock = make_sub_socket()
+        sock = make_sub_socket(lapazcfg.app.ctx.socket(ZMQ::SUB))
         begin
           loop do
             msg = conveyor(sock)
@@ -112,7 +111,7 @@ module Lapaz
       end
       menc = BERT.encode(msg.to_hash)
       q_msg = q_able || Queueable.new(@pub_to,@pub_at,@mux_id)
-      puts "component push queueable: #{q_msg.inspect}"
+      #puts "component push queueable: #{q_msg.inspect}"
       q_msg.msg = menc
       @app.enqueue(q_msg)
       msg
