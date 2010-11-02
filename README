@@ -86,4 +86,16 @@ Sammy.js based client app taking JSON from Mongrel2.
 Compensate, or how to reverse a previous steps state change when something goes wrong.
 HTTP streaming when availble in Mongrel2.
 
+BTW
+
+time curl -i -H "Accept: application/json" http://localhost:6767/handlertest/purchases/1234-DSF.json
+HTTP/1.1 200 OK
+Content-type: application/json; charset=utf-8
+Content-Length: 411
+
+{"kind":"default","body":{"mongrel_req_body":"","purchases":[{"_id":{"$oid":"4ccf9fde652e5d81cd789c0a"},"id":"1234-DSF","contacts":{"id":"886644","name":"Bob Smith"},"items":[{"id":"4521","name":"Widget X","price":45.21,"ccy":"EUR"}],"notes":"rest of purchase object here"}],"prices":[{"_id":{"$oid":"4ccf9fde652e5d81cb789c0a"},"ccy_pair":"EURGBP","bid":"0.87330","offer":"0.87427"}]},"errors":[],"warnings":[]}
+real  0m0.048s
+user  0m0.010s
+sys   0m0.000s
+
 More to follow...

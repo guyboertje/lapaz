@@ -11,7 +11,11 @@ module Lapaz
       @workunit, @forward_to, @reply_to = opts.values_at(:work, :forward_to, :reply_to)
       @loop_once = opts[:loop_once] || false
       @sub_topic = "#{@route_name}/#{@seq_id}"
+
       if @forward_to
+        if @reply_to && @mux_id
+          @reply_to += "/#{@mux_id}"
+        end
         route,step,mux = @forward_to.split('/',3)
         @pub_to = route
         @pub_at = step
@@ -109,10 +113,9 @@ module Lapaz
       if @reply_to && @forward_to
         msg.headers[:reply_to] = @reply_to
       end
-      menc = BERT.encode(msg.to_hash)
       q_msg = q_able || Queueable.new(@pub_to,@pub_at,@mux_id)
       #puts "component push queueable: #{q_msg.inspect}"
-      q_msg.msg = menc
+      q_msg.msg = DefCoder.encode(msg.to_hash)
       @app.enqueue(q_msg)
       msg
     end
@@ -131,7 +134,7 @@ module Lapaz
     def pull(msg,sock)
       topic = sock.recv_string
       body  = sock.more_parts? ? sock.recv_string : nil
-      msge = Lapaz::DefaultMessage.new(body ? BERT.decode(body) : {}).merge!(msg)
+      msge = Lapaz::DefaultMessage.new(body ? DefCoder.decode(body) : {}).merge!(msg)
       #puts "<<-#{topic}"
       {:message=>msge,:topic=>topic}
     end

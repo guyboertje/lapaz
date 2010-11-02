@@ -35,7 +35,7 @@ module Lapaz
       def work(msg)
         params = msg.headers[:path_params]
         b = if params && params[:format] =~ /^js/
-              {:mongrel_http_body=>msg.to_json, :mime=>'json'}
+              {:mongrel_http_body=>msg.to_json_content, :mime=>'json'}
             else
               path = msg.headers.delete(:view_template)
               path = File.join(lapazcfg.app_views.folder,path)
@@ -81,7 +81,7 @@ module Lapaz
       end
     end
 
-    class Tester < Base
+    class NoopProcessor < Base
       def work(msg)
             #simulate some work being done
             #Thread.new{sleep(rand/10.0)}.join
@@ -89,7 +89,7 @@ module Lapaz
       end
     end
 
-    class Prices < Tester
+    class Prices < Base
       include Lapaz::Mongo::Reader
       def initialize(opts)
         @collection = lapazcfg.mongo.db.collection(opts.delete(:mongo_collection))
@@ -106,21 +106,33 @@ module Lapaz
       end
     end
 
-    class Purchases < Tester
+    class Purchases < Base
+      include Lapaz::Mongo::Reader
+      def initialize(opts)
+        @collection = lapazcfg.mongo.db.collection(opts.delete(:mongo_collection))
+        super
+      end
       def work(msg)
         super
-        msg.add :body,{:purchases=>[{'id'=>'1234-DSF','contact_id'=>'886644','stock_id'=>'4521','notes'=>'rest of purchase object here'}]}
+        id = msg.headers[:path_params][:id]
+        #is something?
+        find = {'id'=>id}
+        purchases = []
+        read(find).each do |doc|
+          purchases << doc.to_hash
+        end
+        msg.add :body,{:purchases=>purchases}
       end
     end
 
-    class Contacts  < Tester
+    class Contacts  < Base
       def work(msg)
         super
         msg.add :body,{:contacts=>[{'id'=>'886644','name'=>'Bob Smith','age'=>32,'notes'=>'rest of contact object here'}]}
       end
     end
 
-    class StockItems < Tester
+    class StockItems < Base
       def work(msg)
         super
         msg.add :body,{:stock_items=>[{'id'=>'4521','name'=>'Widget X','price'=>45.21,'ccy'=>'EUR','notes'=>'rest of stock object here'}]}

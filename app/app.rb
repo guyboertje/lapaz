@@ -2,13 +2,15 @@ Thread.abort_on_exception = true
 
 include Lapaz
 
+# mixin Bert for message transcoding
+Lapaz::DefCoder.extend(Lapaz::BertCoder)
+
 app = Lapaz::Router.application('test_app') do
 
   route(:route_name=>"purchases") do
-    from Processor::Purchases, {:seq_id=>0,:name=>'start'}
-      to Consumer::Forwarder,{:seq_id=>1,:forward_to=>'prices/start',:reply_to=>'purchases/render/3.3'}
-      to Processor::Contacts,{:seq_id=>1,:mux_id=>'3.1'}
-      to Processor::StockItems,{:seq_id=>1,:mux_id=>'3.2'}
+    from Processor::NoopProcessor, {:seq_id=>0,:name=>'start'}
+      to Consumer::Forwarder,{:seq_id=>1,:mux_id=>'2.2',:forward_to=>'prices/start',:reply_to=>'purchases/render'}
+      to Processor::Purchases, {:seq_id=>1,:mux_id=>'2.1',:mongo_collection=>'purchases'}
       to Processor::TemplateRenderer,{:seq_id=>2,:name=>'render'}
       to Processor::LayoutRenderer,{:seq_id=>3}
       to Consumer::MongrelConsumer,{:seq_id=>4}
@@ -43,6 +45,18 @@ app.run()
 
 
 =begin
+
+  route(:route_name=>"purchases") do
+    from Processor::Purchases, {:seq_id=>0,:name=>'start',:mongo_collection=>'purchases'}
+      to Consumer::Forwarder,{:seq_id=>1,:mux_id=>'3.3',:forward_to=>'prices/start',:reply_to=>'purchases/render'}
+      to Processor::Contacts,{:seq_id=>1,:mux_id=>'3.1'}
+      to Processor::StockItems,{:seq_id=>1,:mux_id=>'3.2'}
+      to Processor::TemplateRenderer,{:seq_id=>2,:name=>'render'}
+      to Processor::LayoutRenderer,{:seq_id=>3}
+      to Consumer::MongrelConsumer,{:seq_id=>4}
+  end
+
+
 
   route(:route_name=>"reply_to_test") do
     from Producer::FileProducer, {:seq_id=>0,:name=>'start',:filename=>"/home/gb/dev/lapaz/lib/samples/test.data",:loop_once=>true}

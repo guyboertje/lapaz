@@ -34,23 +34,31 @@ lapazcfg.mongo do |cfg|
   db = cfg.db = cfg.con.db(cfg.db_name)
 end
 
+populate = false
 # populate the db
-unless db.has_collection?('prices')
+if populate
+  ['prices','purchases','contacts','inventories'].each do |coll|
+    db.drop_collection(coll)
+  end
 
   prices = [{'ccy_pair'=>'EURGBP','bid'=>'0.87330','offer'=>'0.87427'},{'ccy_pair'=>'GBPEUR','bid'=>'1.14381','offer'=>'1.14508'}]
   res = db.collection('prices').insert(prices)
   puts "Insert results: #{res.inspect}"
 
-  purchase= {'id'=>'1234-DSF','contact_id'=>'886644','stock_id'=>'4521','notes'=>'rest of purchase object here'}
+  purchase= {'id'=>'1234-DSF',
+              'contacts'=>{'id'=>'886644','name'=>'Bob Smith'},
+              'items'=>[{'id'=>'4521','name'=>'Widget X','price'=>45.21,'ccy'=>'EUR'}],
+              'notes'=>'rest of purchase object here'
+  }
   res = db.collection('purchases').insert(purchase)
   puts "Insert results: #{res.inspect}"
 
   contact = {'id'=>'886644','name'=>'Bob Smith','age'=>32,'notes'=>'rest of contact object here'}
-  res = db.collection('purchases').insert(contact)
+  res = db.collection('contacts').insert(contact)
   puts "Insert results: #{res.inspect}"
 
   stock = {'id'=>'4521','name'=>'Widget X','price'=>45.21,'ccy'=>'EUR','notes'=>'rest of stock object here'}
-  res = db.collection('purchases').insert(stock)
+  res = db.collection('inventories').insert(stock)
   puts "Insert results: #{res.inspect}"
 
 end

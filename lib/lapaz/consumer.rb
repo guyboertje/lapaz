@@ -12,7 +12,11 @@ module Lapaz
       end
     end
 
-    Forwarder = Class.new(Base)
+    class Forwarder < Base
+      def push(msg)
+        super(Message.new_keep_headers(msg))
+      end
+    end
 
     class ReplyToForwarder < Base
       def push(msg)

@@ -3,6 +3,10 @@ module Lapaz
     attr_accessor :body, :headers, :errors, :warnings
     attr_reader :kind
 
+    def self.new_keep_headers(msg)
+      new({:kind=>msg.kind,:headers=>msg.headers})
+    end
+
     def initialize(opts={})
       @headers = opts[:headers] || {}
       @body = opts[:body] || {}
@@ -46,9 +50,14 @@ module Lapaz
     def to_hash
       {:kind=>kind,:headers=>headers,:body=>body,:errors=>errors,:warnings=>warnings}
     end
-
+    def to_hash_content
+      {:kind=>kind,:body=>body,:errors=>errors,:warnings=>warnings}
+    end
     def to_json
       to_hash.to_json
+    end
+    def to_json_content
+      to_hash_content.to_json
     end
     def inspect
       to_hash.inspect
