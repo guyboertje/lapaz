@@ -21,8 +21,9 @@ module Lapaz
     class ReplyToForwarder < Base
       def push(msg)
         q_able = nil
-        if msg.headers.has_key?(:reply_to)
-          reply_to = msg.headers.delete(:reply_to)
+        #puts "headers: " + msg.headers.inspect
+        reply_to = msg.headers[:reply_to].pop
+        if reply_to
           r,s,m = reply_to.split('/',3)
           q_able = Queueable.new(r,s,m)
         end
@@ -30,7 +31,7 @@ module Lapaz
       end
     end
 
-    class MongrelForwarder < Base
+    class PathForwarder < Base
       def push(msg)
         path = msg.headers['PATH']
         lapaz_route = @app.path_handler.handle(path)
@@ -42,7 +43,42 @@ module Lapaz
       end
     end
 
-    class MongrelConsumer < Base
+    class McastSender < Base
+      def push(msg,q_able=nil)
+        r,s,m = msg.headers[:svc_path], -1, nil
+        if r
+          q_msg = Queueable.new(r,s,m)
+          q_msg.msg = ExtCoder.encode(msg.to_hash)
+          @app.enqueue(q_msg,true)
+        end
+        msg
+      end
+    end
+
+    class ExternalRunner < Base
+      def work(msg)
+        params = msg.headers[:path_params]
+        source = (params && params[:source]) ? params[:source] : nil
+        route = (params && params[:route]) ? params[:route] : nil
+        seq = (params && params[:seq]) ? params[:seq] : 0
+        msg.add :headers, {:route_to_run=> "#{route}/#{seq}", :svc_path => "#{lapazcfg.svc.topic_base}/#{app.uuid}/#{source}/result"}
+      end
+      def push(msg,q_able=nil)
+        if @reply_to
+          msg.headers[:reply_to] << @reply_to
+        end
+        lap = msg.headers.delete(:route_to_run)
+        r,s,m = lap.split('/',3)
+        if r
+          q_msg = Queueable.new(r,s,m)
+          q_msg.msg = DefCoder.encode(msg.to_hash)
+          @app.enqueue(q_msg,false)
+        end
+        msg
+      end
+    end
+
+    class MongrelResponder < Base
       def initialize(opts)
         super
         cfg = lapazcfg.mongrel

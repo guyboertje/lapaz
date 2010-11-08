@@ -6,12 +6,12 @@ module Lapaz
     attr_reader :app, :sub_sock, :route_name, :seq_id, :mux_id, :workunit, :loop_once, :name, :pub_to, :pub_at
 
     def initialize(opts)
-      @seq_id, @name, @mux_id, @route_name = opts.values_at(:seq_id, :name, :mux_id, :route_name)
+      @seq_id, @name, @mux_id, @route_name, @ext = opts.values_at(:seq_id, :name, :mux_id, :route_name, :ext)
       #puts "#{@route_name} #{@seq_id} >"
       @workunit, @forward_to, @reply_to = opts.values_at(:work, :forward_to, :reply_to)
       @loop_once = opts[:loop_once] || false
       @sub_topic = "#{@route_name}/#{@seq_id}"
-
+      @ext = !!(@ext)
       if @forward_to
         if @reply_to && @mux_id
           @reply_to += "/#{@mux_id}"
@@ -25,29 +25,29 @@ module Lapaz
         @pub_at = @seq_id.next
       end
       @collator = {}
+      @endpt = lapazcfg.app.endpt
+      @ctx = lapazcfg.app.ctx
     end
 
     def producer?; false; end
     def consumer?; false; end
 
-    def describe
-      @name ? {:lapaz_route=>@route_name+"/"+@name} : nil
+    def describe(external_only=false)
+      return nil unless @name
+      return nil unless @ext
+      {'lapaz_route'=>{'path'=>"#{@route_name}/#{@name}", 'externally_callable'=>@ext}}
     end
     def to_hash
       {:route_name=>@route_name, :seq_id=>@seq_id, :mux_id=>@mux_id, :sub_topic=>@sub_topic}
     end
-    def make_sub_socket sock
-      sock.setsockopt(ZMQ::SUBSCRIBE,@sub_topic)
-      sock.connect lapazcfg.app.endpt
-      sock
-    end
     def run(app)
       @app = app
-      th = Thread.new do
-        sock = make_sub_socket(lapazcfg.app.ctx.socket(ZMQ::SUB))
+      Thread.new do
+        trans = ZeroMqSub.new(@ctx,@endpt)
+        trans.subscribe(@sub_topic)
         begin
           loop do
-            msg = conveyor(sock)
+            msg = conveyor(trans)
             break if loop_once || (msg && msg.headers[:stop_this_route] == @route_name)
           end
         rescue => e
@@ -70,8 +70,8 @@ module Lapaz
       @workunit.respond_to?(:call) ? @workunit.call(msg) : msg
     end
 
-    def conveyor(sock)
-      pulled = pull(nil,sock)
+    def conveyor(trans)
+      pulled = pull(nil,trans)
       msg,topic = pulled.values_at(:message,:topic)
       #looking for mux_id i.e.:
       #  2.1 means accumulate 2 messages& this is the first message
@@ -110,11 +110,12 @@ module Lapaz
     end
 
     def push(msg,q_able=nil)
-      if @reply_to && @forward_to
-        msg.headers[:reply_to] = @reply_to
+      if @reply_to
+        msg.headers[:reply_to] << @reply_to
       end
       q_msg = q_able || Queueable.new(@pub_to,@pub_at,@mux_id)
       #puts "component push queueable: #{q_msg.inspect}"
+      #puts "msg: #{msg.inspect}"
       q_msg.msg = DefCoder.encode(msg.to_hash)
       @app.enqueue(q_msg)
       msg
@@ -131,14 +132,12 @@ module Lapaz
       m
     end
 
-    def pull(msg,sock)
-      topic = sock.recv_string
-      body  = sock.more_parts? ? sock.recv_string : nil
+    def pull(msg,trans)
+      topic,body = trans.receive
       msge = Lapaz::DefaultMessage.new(body ? DefCoder.decode(body) : {}).merge!(msg)
       #puts "<<-#{topic}"
       {:message=>msge,:topic=>topic}
     end
-
 
     class Queueable
       attr_reader :route,:name,:mux
@@ -159,7 +158,8 @@ module Lapaz
         !@name.empty?
       end
       def topic
-        a = [@route,@seq_id]
+        a = [route]
+        a << seq_id if seq_id && seq_id > -1
         a << mux if mux && !mux.empty?
         a.join('/')
       end

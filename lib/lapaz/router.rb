@@ -21,20 +21,19 @@ module Lapaz
 
       dsl_methods false
 
-      def describe
+      def describe(external_only=false)
         ret = @chain.map do |comp|
-          comp.describe
+          comp.describe(external_only)
         end.flatten
         ret
       end
 
-      def publish(sock,q_object)
+      def publish(trans,q_object)
         raise "In route: #{self.name}, cannot find a step named: #{q_object.name}" if q_object.named? && !@named_steps.has_key?(q_object.name)
         if q_object.named?
           q_object.seq_id = @named_steps[q_object.name]
         end
-        sock.send_string(q_object.topic, ZMQ::SNDMORE) #TOPIC
-        sock.send_string(q_object.msg) #BODY
+        trans.send(q_object.topic, q_object.msg)
         #puts "->>#{q_object.topic}"
       end
 
@@ -68,49 +67,90 @@ module Lapaz
         @named_steps[component.name] = component.seq_id if component.name
       end
     end
-
+    class ExtRoutesCache
+      def initialize()
+        @cache = {}
+      end
+      def add(services)
+        uuid,routes = services.values_at('app_id','routes')
+        @cache[uuid] = routes
+      end
+      def find(route)
+        ret = []
+        @cache.each do |id,routes|
+          routes.each do |kind,detail|
+            ret << {route=>id} if detail['callable_externally'] && kind.to_s == 'lapaz_route' && detail['path'] == route
+          end
+        end
+        ret
+      end
+    end
     class Router
       include Blockenspiel::DSL
-      attr_reader :path_handler, :name
+      attr_reader :path_handler, :name, :uuid
       def initialize(name)
         @name = name
+        @uuid = lapazcfg.app.uuid
         @routes ||= {}
         @path_handler = PathHandler.new
         @queue = Queue.new
+        @srv_queue = Queue.new
+        @ctx = lapazcfg.app.ctx
+        @endpt = lapazcfg.app.endpt
+
+        @ext_services = ExtRoutesCache.new
         puts "... #{name} ..."
       end
 
       dsl_methods false
 
-      def enqueue(q_object)
+      def enqueue(q_object, is_svc=false)
         #puts q_object.inspect
-        @queue << q_object
+        if is_svc
+          @srv_queue << q_object
+        else
+          @queue << q_object
+        end
       end
 
-      def services
-        srvs = @routes.values.map do |r|
-          r.describe
+      def update_external_services(services)
+        @ext_services.add(services)
+      end
+
+      def services(external_only=false)
+        svcs = @routes.values.map do |r|
+          r.describe(external_only)
         end.flatten.compact
-        {:app => @name, :routes => srvs}
+        {:app => name, :app_id=>uuid, :routes => svcs}
       end
 
-      def publish(q_object)
+      def publish(trans,q_object)
         route_name = q_object.route
+        # check externally
         raise "Cannot find a route named: #{route_name}" unless @routes.has_key?(route_name)
-        @routes[route_name].publish(@pub_sock, q_object)
+        @routes[route_name].publish(trans, q_object)
       end
 
       def run()
-
-        @pub_sock = lapazcfg.app.ctx.socket(ZMQ::PUB)
-        @pub_sock.bind lapazcfg.app.endpt
+        # for inproc have to bind before connecting in the component subscribe
+        int = ZeroMqPub.new(@ctx, lapazcfg.app.endpt)
+        int.setup_publish
 
         @routes.values.collect do |r|
-          Thread.new { r.run() }
-        end.each{|thread| thread.join}
+          r.run
+        end
+
+        Thread.new do
+          ext = ZeroMqPub.new(@ctx, lapazcfg.svc.endpt)
+          ext.setup_publish
+          loop do
+            q_object = @srv_queue.pop
+            ext.send(q_object.topic, q_object.msg)
+          end
+        end
 
         loop do
-          publish @queue.pop
+          publish int, @queue.pop
         end
       end
 

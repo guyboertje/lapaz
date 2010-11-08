@@ -17,7 +17,7 @@ Mongrel2 went async using ZMQ to send requests to a handler and waiting for a re
 
 What can I build with it?
 
-It can be used to build applications or parts of applications that occur asynchronously or are
+Lapaz can build applications or parts of applications that occur asynchronously or are
 functionally decomposable.
 
 For example:
@@ -29,28 +29,28 @@ Mongrel2 adds HTTP accessibility to a Lapaz application primarily to serve clien
 How does it work?
 
 It is composed of components that communicate with each other. Components are assembled in a route,
-more like a directional acyclic graph actually with messages flowing from the starting step through
+actually more like a directional acyclic graph with messages flowing from the starting step through
 the paths of the route.  A group of routes make up an application.
 
 Each component has three pieces -
 pull: subscribes to messages addressed to it,
 process: process the pulled message,
-push: publish the processed message to the next component.
+push: publishes the processed message to the next component.
 
 Specialised components redefine one or more of the above pieces.
 
 A Producer will redefine the pull component and produce internal messages from an external source.
-Producer examples are: a MongrelProducer that receives messages from a browser via Mongrel2,
-XmppProducer, RabbitMQProducer.  A Producer creates a new message with an iteration id.
+Producer examples are: a MongrelProducer that receives messages from a browser and is one half of the
+Mongrel2 handler, XmppProducer, RabbitMQProducer. A Producer creates a new message with an iteration id.
 
 A Processor will redefine the process piece - typically augmenting the pulled message in some way.
 Processor exampes are: a TemplateRenderer that will use the message and a template to render HTML,
-DbReader, DbWriter, YamlParser.
+DbReader, DbWriter, YamlParser and Domain specific Components.
 
 A Consumer will redefine the push piece and send a (transformed) message to an external target or
 a named step in another route.
-Consumer examples are: a MongrelConsumer that sends a response to Mongrel2, RabbitMQConsumer,
-SysLogConsumer, XmppConsumer, StdOut, EmailSender.
+Consumer examples are: a MongrelConsumer (the other half of the Mongrel2 handler) that sends a
+response to Mongrel2, RabbitMQConsumer, SysLogConsumer, XmppConsumer, StdOut, EmailSender.
 
 A Route is a sequence of components arranged in steps 0 to N. One component is at step 0, typically.
 Multiple components can be in a step - they receive and process messages in parallel (multiplex).
@@ -64,7 +64,8 @@ received before the second or first message).
 Forwarding consumers can publish a message to a named step in another route.
 
 This is a route from a test application. This route has no Producers at step 0 so by subscribing to
-the topic "purchases/0" it waits for a message.
+the topic "purchases/0" it waits for a message.  This route is engaged when another route sends it a
+message.  It also shows the parallel enaction of Components in the subsequent step.
 
 route(:route_name=>"purchases") do
   from Processor::Purchases, {:seq_id=>0,:name=>'start'}
@@ -79,11 +80,11 @@ end
 TODO:
 
 Multicast Publish and Subscribe for service discovery and inter-app messaging.
-Cascade demultiplexing.
-Add more components: RabbitMQ, Syslogger.
+Add more components: RabbitMQ, SysloggerConsumer.
 ZMQ request/reply entry point for synchronous peers (Rails, Sinatra) with a driver.
-Sammy.js based client app taking JSON from Mongrel2.
+Sammy.js based example client app taking JSON from Lapaz.
 Compensate, or how to reverse a previous steps state change when something goes wrong.
+Cascade demultiplexing.
 HTTP streaming when availble in Mongrel2.
 
 BTW
@@ -93,7 +94,16 @@ HTTP/1.1 200 OK
 Content-type: application/json; charset=utf-8
 Content-Length: 411
 
-{"kind":"default","body":{"mongrel_req_body":"","purchases":[{"_id":{"$oid":"4ccf9fde652e5d81cd789c0a"},"id":"1234-DSF","contacts":{"id":"886644","name":"Bob Smith"},"items":[{"id":"4521","name":"Widget X","price":45.21,"ccy":"EUR"}],"notes":"rest of purchase object here"}],"prices":[{"_id":{"$oid":"4ccf9fde652e5d81cb789c0a"},"ccy_pair":"EURGBP","bid":"0.87330","offer":"0.87427"}]},"errors":[],"warnings":[]}
+{"kind":"default","body":{"mongrel_req_body":"",
+"purchases":[{"_id":{"$oid":"4ccf9fde652e5d81cd789c0a"},
+"id":"1234-DSF","contacts":{"id":"886644","name":"Bob Smith"},
+"items":[{"id":"4521","name":"Widget X","price":45.21,"ccy":"EUR"}],
+"notes":"rest of purchase object here"}],
+"prices":[{"_id":{"$oid":"4ccf9fde652e5d81cb789c0a"},"ccy_pair":"EURGBP","bid":"0.87330","offer":"0.87427"}]
+},
+"errors":[],
+"warnings":[]}
+
 real  0m0.048s
 user  0m0.010s
 sys   0m0.000s

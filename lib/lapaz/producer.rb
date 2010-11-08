@@ -5,10 +5,10 @@ module Lapaz
       def consumer?; false; end
       # pull should return a hash with contents for sub topic and body
       # but for producers, first in line, there is no sub topic
-      def pull(msg,skt)
+      def pull(msg,trans)
         msg = Lapaz::DefaultMessage.new unless msg
         msg.headers[:iter_id] = ::UUID.generate
-        super(msg,skt)
+        super(msg,trans)
       end
       def postamble(msg)
         msg.headers[:iter_id] = ::UUID.generate
@@ -50,7 +50,7 @@ module Lapaz
         @connection = cfg.conn
       end
 
-      def pull(msg,skt)
+      def pull(msg,trans)
         h = {}
         lapazcfg.mongrel.conn.recv do |req|
           h = req.to_hash
@@ -60,5 +60,28 @@ module Lapaz
       end
     end
 
+    class McastReceiver < Lapaz::Component
+
+      def initialize(opts)
+        super
+        @sub_topic = lapazcfg.svc.topic_base
+        @endpt = lapazcfg.svc.endpt
+      end
+
+      def pull(msg,trans)
+        got_one = false
+        topic = body = nil
+        until got_one
+          topic,body = trans.receive
+          from_us = topic.start_with?("#{lapazcfg.svc.topic_base}/#{app.uuid}")
+          for_us = !!(topic =~ lapazcfg.svc.for_us_re)
+          got_one = for_us && !from_us
+        end
+        msge = Lapaz::DefaultMessage.new(body ? ExtCoder.decode(body) : {}).merge!(msg)
+        msge.headers['PATH'] = topic
+        #puts "<<-#{topic}"
+        {:message=>msge,:topic=>topic}
+      end
+    end
   end
 end

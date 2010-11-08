@@ -24,6 +24,41 @@ module Lapaz
       end
     end
 
+    class Unrecognized < Base
+      def work(msg)
+        msg.add_to :headers, {:path_params=>{:action => 'path_not_found'}}
+      end
+    end
+
+    class Services < Base
+      def work(msg)
+        params = msg.headers[:path_params]
+        source = (params && params[:source]) ? params[:source] : nil
+        target = (params && params[:target]) ? params[:target] : nil
+        action = (params && params[:action]) ? params[:action] : nil
+        destination = (target =~ /(_all_|_any_)/) ? target : source
+        #puts "! Services destination: #{destination}, action: #{action}"
+        case action
+        when 'info'
+          msg
+        when 'update'
+          # receive services available from other apps
+          app.update_external_services(msg.body)
+          msg.headers[:svc_path] = "#{lapazcfg.svc.topic_base}/#{app.uuid}/#{destination}/info"
+          msg.add :body, {:info=>"Received ok from: #{app.name}"}
+        when 'query'
+          # send services available from this app
+          msg.headers[:svc_path] = "#{lapazcfg.svc.topic_base}/#{app.uuid}/#{destination}/update"
+          msg.add :body, app.services(true)
+        when 'path_not_found'
+          msg.add :errors, {:type=>'PathNotFound', :message=>"Path not found: #{msg.headers['PATH']}"}
+        else
+          # action unknown
+          msg.add :errors, {:type=>'ActionUnknown', :message=>"Action: #{action} is not defined!"}
+        end
+      end
+    end
+
     class Renderer < Base
       def initialize(opts)
         super

@@ -9,6 +9,7 @@ module Lapaz
 
     def initialize(opts={})
       @headers = opts[:headers] || {}
+      @headers[:reply_to] = [] unless @headers[:reply_to].kind_of?(Array)
       @body = opts[:body] || {}
       @errors = opts[:errors] || []
       @warnings = opts[:warnings] || []
@@ -25,7 +26,7 @@ module Lapaz
 
     def add_to(where, what)
       case where
-      when :headers
+      when :headers,:header
         @headers.merge! what
       when :body
         @body.merge! what
@@ -79,7 +80,6 @@ module Lapaz
       e << "Argument Error: no path given" unless opts[:path]
       h = opts.delete(:headers)
       b = opts.delete(:body)
-
       h.merge!(opts)
       super({:kind=>'mongrel2',:headers=>h,:errors=>e,:body=>{:mongrel_req_body=>b}})
     end

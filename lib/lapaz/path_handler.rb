@@ -3,7 +3,7 @@ module Lapaz
   class PathHandler
 
     include Blockenspiel::DSL
-#:delimiters => ['/','.']
+
     def initialize(&blk)
       @usher = Usher.new()
       instance_eval(&blk) if blk
@@ -12,7 +12,8 @@ module Lapaz
     dsl_methods false
 
     def handle(request_path)
-      response = @usher.recognize_path(request_path.strip)
+      stripped = request_path.strip
+      response = @usher.recognize_path(stripped)
       if response
         ret = response.path.route.destination.dup
         blk = ret.delete(:block)
@@ -24,7 +25,7 @@ module Lapaz
           ret
         end
       else
-        @unrecognize_block ? @unrecognize_block.call : {:lapaz_path => 'errors/mongrel', :path_params =>{}}
+        @unrecognize_block ? @unrecognize_block.call(stripped) : {:lapaz_path => 'errors/mongrel', :path_params =>{}}
       end
     end
 
@@ -36,7 +37,7 @@ module Lapaz
 
     def build(opts = nil, &blk)
       o = opts.dup
-      url_pattern = o.delete(:url_pattern)
+      url_pattern = o.delete(:path_pattern)
       o[:view_template] ||= ''
       o[:view_layout] ||= ''
       o[:block] = blk

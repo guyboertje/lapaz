@@ -23,10 +23,12 @@ end
 
 AppDir = File.join(root_dir,'app')
 
-require File.join('lapaz','lapaz_conf')
+%W(thread yaml rubygems ffi-rzmq bert uuid blockenspiel usher erubis tilt json jmongo ).each {|lib| require lib }
 
-%W(thread rubygems ffi-rzmq bert yaml uuid blockenspiel usher erubis tilt json jmongo ).each {|lib| require lib }
-#
+#load up low level stuff
+%W(lapaz_conf transport serializer).each do |lib|
+  require File.join('lapaz',lib)
+end
 
 Tilt.register 'erb', Tilt::ErubisTemplate
 

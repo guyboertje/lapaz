@@ -2,39 +2,60 @@ Thread.abort_on_exception = true
 
 include Lapaz
 
-# mixin Bert for message transcoding
-Lapaz::DefCoder.extend(Lapaz::BertCoder)
-
 app = Lapaz::Router.application('test_app') do
 
   route(:route_name=>"purchases") do
-    from Processor::NoopProcessor, {:seq_id=>0,:name=>'start'}
-      to Consumer::Forwarder,{:seq_id=>1,:mux_id=>'2.2',:forward_to=>'prices/start',:reply_to=>'purchases/render'}
-      to Processor::Purchases, {:seq_id=>1,:mux_id=>'2.1',:mongo_collection=>'purchases'}
-      to Processor::TemplateRenderer,{:seq_id=>2,:name=>'render'}
-      to Processor::LayoutRenderer,{:seq_id=>3}
-      to Consumer::MongrelConsumer,{:seq_id=>4}
+    from Processor::Purchases, {:seq_id=>0,:mux_id=>'2.1',:mongo_collection=>'purchases',:name=>'start',:ext=>true}
+      to Consumer::Forwarder,{:seq_id=>0,:mux_id=>'2.2',:forward_to=>'prices/start',:reply_to=>'purchases/end'}
+      to Consumer::ReplyToForwarder,{:seq_id=>1,:name=>'end'}
   end
 
   route(:route_name=>"prices") do
-    from Processor::Prices, {:seq_id=>0,:name=>'start',:mongo_collection=>'prices'}
+    from Processor::Prices, {:seq_id=>0,:name=>'start',:mongo_collection=>'prices',:ext=>true}
     to Consumer::ReplyToForwarder,{:seq_id=>1}
   end
 
-  route(:route_name=>"mongrel_test") do
+  route(:route_name=>"mongrel_handler") do
     from Producer::MongrelReceiver,{:seq_id=>0}
-      to Consumer::MongrelForwarder,{:seq_id=>1}
+      to Consumer::PathForwarder,{:seq_id=>1,:reply_to=>'mongrel_handler/render'}
+      to Processor::TemplateRenderer,{:seq_id=>2,:name=>'render'}
+      to Processor::LayoutRenderer,{:seq_id=>3}
+      to Consumer::MongrelResponder,{:seq_id=>4}
   end
 
   route(:route_name=>"errors") do
     from Processor::TemplateRenderer,{:seq_id=>0,:name=>'mongrel'}
-      to Consumer::MongrelConsumer,{:seq_id=>1}
+      to Consumer::MongrelResponder,{:seq_id=>1}
   end
 
+  route(:route_name=>"services") do
+    from Producer::McastReceiver,{:seq_id=>0}
+      to Consumer::PathForwarder,{:seq_id=>1}
+  end
+
+  route(:route_name=>"svc_qry") do
+    from Processor::Unrecognized,{:seq_id=>0,:name=>'err'}
+      to Processor::Services,{:seq_id=>1,:name=>'start'}
+      to Consumer::McastSender,{:seq_id=>2}
+  end
+
+  route(:route_name=>"svc_run") do
+    from Processor::NoopProcessor,{:seq_id=>0,:name=>'start'}
+      to Consumer::ExternalRunner,{:seq_id=>1,:reply_to=>'svc_run/send'}
+      to Consumer::McastSender,{:seq_id=>2,:name=>'send'}
+  end
 
   url_handlers do
-    unrecognized { {:lapaz_route => 'errors/mongrel', :view_template=>'url_unrecognized.erb', :view_layout=>nil} }
-    build :url_pattern =>'/handlertest/purchases/:id.:format', :lapaz_route => 'purchases/start', :view_template=>'purchases.erb', :view_layout=>'default.erb'
+    unrecognized do |path|
+      if path.start_with? lapazcfg.svc.topic_base
+        {:lapaz_route => 'svc_qry/err'}
+      else
+        {:lapaz_route => 'errors/mongrel', :view_template=>'url_unrecognized.erb', :view_layout=>nil}
+      end
+    end
+    build :path_pattern => '/handlertest/purchases/:id.:format', :lapaz_route => 'purchases/start', :view_template=>'purchases.erb', :view_layout=>'default.erb'
+    build :path_pattern => "#{lapazcfg.svc.topic_base}/:source/:target/run/:route/:seq", :lapaz_route => 'svc_run/start'
+    build :path_pattern => "#{lapazcfg.svc.topic_base}/:source/:target/:action", :lapaz_route => 'svc_qry/start'
   end
 
 end
@@ -45,7 +66,6 @@ app.run()
 
 
 =begin
-
   route(:route_name=>"purchases") do
     from Processor::Purchases, {:seq_id=>0,:name=>'start',:mongo_collection=>'purchases'}
       to Consumer::Forwarder,{:seq_id=>1,:mux_id=>'3.3',:forward_to=>'prices/start',:reply_to=>'purchases/render'}
@@ -55,24 +75,10 @@ app.run()
       to Processor::LayoutRenderer,{:seq_id=>3}
       to Consumer::MongrelConsumer,{:seq_id=>4}
   end
-
-
-
   route(:route_name=>"reply_to_test") do
     from Producer::FileProducer, {:seq_id=>0,:name=>'start',:filename=>"/home/gb/dev/lapaz/lib/samples/test.data",:loop_once=>true}
       #to Processor::Prices, {:seq_id=>1}
       to Consumer::Forwarder,{:seq_id=>1,:forward_to=>'prices/start',:reply_to=>'reply_to_test/end'}
       to Consumer::Stdout,{:seq_id=>2,:name=>'end'}
   end
-
-    o3 = {:route_name=>"forward_test",:seq_id=>0}
-    add_route from(TestProducer,o3).
-              to(Delayer,{:seq_id=>1, :delay_for=>3}).
-              to(Forwarder,{:seq_id=>2, :forward_to=>'parallel_test/purchase'})
-
-    o2 = {:route_name=>"yaml_test",:seq_id=>0}
-    o2[:filename] = "/home/gb/dev/lapaz/lib/samples/test.yml"
-    add_route from(YamlFileProducer,o2).
-              to(YamlProcessor,{:seq_id=>1}).
-              to(Stdout,{:seq_id=>2})
 =end
