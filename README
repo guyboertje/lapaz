@@ -1,7 +1,7 @@
 Lapaz is an asynchronous JRuby application framework using components supported by ZeroMQ, Mongrel 2
 and MongoDB.
 
-Lapaz is not finished.  It's halfway through the beginning.
+Lapaz 0.0.1 is not finished.  It's halfway through the middle.
 
 Why?
 
@@ -48,14 +48,14 @@ Processor exampes are: a TemplateRenderer that will use the message and a templa
 DbReader, DbWriter, YamlParser and Domain specific Components.
 
 A Consumer will redefine the push piece and send a (transformed) message to an external target or
-a named step in another route.
+a named step in another route (perhaps running on a different machine).
 Consumer examples are: a MongrelConsumer (the other half of the Mongrel2 handler) that sends a
 response to Mongrel2, RabbitMQConsumer, SysLogConsumer, XmppConsumer, StdOut, EmailSender.
 
 A Route is a sequence of components arranged in steps 0 to N. One component is at step 0, typically.
 Multiple components can be in a step - they receive and process messages in parallel (multiplex).
 
-Any component can demultiplex messages addressed to it and will accumulate messages until the last
+Any component can demultiplex messages sent to it and will accumulate messages until the last
 message is received. Accumulation is grouped by iteration id. When the last message is received they
 are merged together and published to the next step.  Multiplexed messages are identified by a
 mux id, e.g. 5.3 meaning - expect to accumulate five messages and this is the third (which may be
@@ -77,9 +77,22 @@ route(:route_name=>"purchases") do
   to Consumer::MongrelConsumer,{:seq_id=>4}
 end
 
-TODO:
-
 Multicast Publish and Subscribe for service discovery and inter-app messaging.
+
+Using ZMQ epgm multicast capability there is support for inter-app service discovery
+When two or more applications are run they will query all for an external services update.
+All apps (except the requestor) will respond with a message containing their callable
+external services (routes). All apps receive this message and update their internal caches.
+When a route is designed that uses an external route it will be called and the reply will be
+send to the designated route/step.  In the above example the forward_to =>'prices/start' might
+be an external call and if so it will be invoked by looking it up in the external services cache.
+This has been implemented with Lapaz component and routes and some small changes to the internals.
+
+I have added a Lurker producer component that can subscribe to any topic.  This can be used for
+logging or any other independant (of the design of a route) message consumption, e.g. send a XMPP
+message when a shipment confirm message is seen.
+
+TODO:
 Add more components: RabbitMQ, SysloggerConsumer.
 ZMQ request/reply entry point for synchronous peers (Rails, Sinatra) with a driver.
 Sammy.js based example client app taking JSON from Lapaz.

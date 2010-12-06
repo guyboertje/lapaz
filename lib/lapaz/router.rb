@@ -33,8 +33,8 @@ module Lapaz
         if q_object.named?
           q_object.seq_id = @named_steps[q_object.name]
         end
-        trans.send(q_object.topic, q_object.msg)
-        #puts "->>#{q_object.topic}"
+        topic = lapazcfg.app.topic_base + q_object.topic
+        trans.send(topic, q_object.msg)
       end
 
       def run()
@@ -72,14 +72,15 @@ module Lapaz
         @cache = {}
       end
       def add(services)
-        uuid,routes = services.values_at('app_id','routes')
+        uuid,routes = services.values_at(:app_id,:routes)
         @cache[uuid] = routes
       end
       def find(route)
         ret = []
         @cache.each do |id,routes|
-          routes.each do |kind,detail|
-            ret << {route=>id} if detail['callable_externally'] && kind.to_s == 'lapaz_route' && detail['path'] == route
+          routes.each do |hash|
+            entry = hash[:lapaz_route]
+            ret << {route=>id} if entry[:externally_callable] && entry[:path] == route
           end
         end
         ret
@@ -99,7 +100,7 @@ module Lapaz
         @endpt = lapazcfg.app.endpt
 
         @ext_services = ExtRoutesCache.new
-        puts "... #{name} ..."
+        puts "... #{name} ... #{Time.now}"
       end
 
       dsl_methods false
@@ -115,20 +116,35 @@ module Lapaz
 
       def update_external_services(services)
         @ext_services.add(services)
+        puts "::::::::: external svcs: #{@ext_services.inspect}"
       end
 
       def services(external_only=false)
         svcs = @routes.values.map do |r|
           r.describe(external_only)
         end.flatten.compact
-        {:app => name, :app_id=>uuid, :routes => svcs}
+        {:app=>name, :app_id=>uuid, :routes=>svcs}
       end
 
       def publish(trans,q_object)
         route_name = q_object.route
-        # check externally
-        raise "Cannot find a route named: #{route_name}" unless @routes.has_key?(route_name)
-        @routes[route_name].publish(trans, q_object)
+        problem = true
+        if @routes.has_key?(route_name)
+          @routes[route_name].publish(trans, q_object)
+          problem = false
+        else
+          what = q_object.ext_route
+          found = @ext_services.find(what)
+          unless found.empty?
+            msg = DefCoder.decode(q_object.msg)
+            msg[:headers][:external_routes] = found  #msg is normal hash not instance of Message
+            q_able = Component::Queueable.new('svc_call',0,nil)
+            q_able.msg = DefCoder.encode(msg)
+            @routes['svc_call'].publish(trans, q_able)
+            problem = false
+          end
+        end
+        raise "Cannot find a route named: #{route_name}" if problem
       end
 
       def run()
@@ -154,9 +170,14 @@ module Lapaz
         end
       end
 
+      def self.configure(app, &block)
+        Blockenspiel.invoke(block, app) if block_given?
+        app
+      end
+
       def self.application(name,&block)
         app = new(name)
-        Blockenspiel.invoke(block, app)
+        Blockenspiel.invoke(block, app) if block_given?
         app
       end
 

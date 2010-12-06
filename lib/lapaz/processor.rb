@@ -6,7 +6,7 @@ module Lapaz
     end
 
     class TmplCache < Hash
-      def fetch path, to_=nil
+      def fetch(path, to_=nil)
         data, et = self[path]
         now = Time.now
         if !et or et < now
@@ -18,7 +18,7 @@ module Lapaz
       alias expire delete
       def purge
         now = Time.now
-        delete_if do |_, (_, t)|
+        delete_if do |_, (__, t)|
           t < now
         end
       end
@@ -26,21 +26,37 @@ module Lapaz
 
     class Unrecognized < Base
       def work(msg)
-        msg.add_to :headers, {:path_params=>{:action => 'path_not_found'}}
+        msg.add :headers, {:path_params => {:action=>'path_not_found'}}
+      end
+    end
+
+    class CallOutRunner < Base
+      def work(msg)
+        #TODO: better strategy for picking routes when multiple routes are offered by other apps
+        routes = msg.headers[:external_routes]
+        lap = routes.first
+        route = lap.keys.first
+        target = lap[route]
+        msg.add :headers, {:svc_path=> "#{lapazcfg.svc.topic_base}/#{app.uuid}/#{target}/run/#{route}"}
+      end
+    end
+
+    class CallOutReply < Base
+      def work(msg)
+        #
+        msg
       end
     end
 
     class Services < Base
       def work(msg)
-        params = msg.headers[:path_params]
-        source = (params && params[:source]) ? params[:source] : nil
-        target = (params && params[:target]) ? params[:target] : nil
-        action = (params && params[:action]) ? params[:action] : nil
+        source = msg.fetch(:headers,:path_params,:source)
+        target = msg.fetch(:headers,:path_params,:target)
+        action = msg.fetch(:headers,:path_params,:action)
         destination = (target =~ /(_all_|_any_)/) ? target : source
-        #puts "! Services destination: #{destination}, action: #{action}"
         case action
         when 'info'
-          msg
+          nil
         when 'update'
           # receive services available from other apps
           app.update_external_services(msg.body)
@@ -48,8 +64,9 @@ module Lapaz
           msg.add :body, {:info=>"Received ok from: #{app.name}"}
         when 'query'
           # send services available from this app
+          app.update_external_services(msg.body)
           msg.headers[:svc_path] = "#{lapazcfg.svc.topic_base}/#{app.uuid}/#{destination}/update"
-          msg.add :body, app.services(true)
+          msg.replace :body, app.services(true)
         when 'path_not_found'
           msg.add :errors, {:type=>'PathNotFound', :message=>"Path not found: #{msg.headers['PATH']}"}
         else
@@ -68,8 +85,8 @@ module Lapaz
 
     class TemplateRenderer < Renderer
       def work(msg)
-        params = msg.headers[:path_params]
-        b = if params && params[:format] =~ /^js/
+        format = msg.fetch(:headers,:path_params,:format)
+        b = if format =~ /^js/
               {:mongrel_http_body=>msg.to_json_content, :mime=>'json'}
             else
               path = msg.headers.delete(:view_template)
@@ -92,26 +109,13 @@ module Lapaz
       end
     end
 
-    class YamlProcessor < Base
-      def work(msg)
-        key,obj = :warnings,"YamlProcessor: no work to do"
-        if msg.headers[:file_contents_type] == 'yaml'
-          xfrm = YAML.parse(msg.body[:file_contents]).transform
-          key,obj = :body,{xfrm.type_id.to_sym => [xfrm.value]}
-          msg.headers.delete(:file_contents_type)
-          msg.body.delete(:file_contents)
-        end
-        msg.add_to key,obj
-      end
-    end
-
     class Delayer < Base
       def initialize(opts)
         @delay_for = opts[:delay_for]
         super
       end
       def work(msg)
-        Thread.new{sleep(@delay_for)}.join
+        sleep(@delay_for)
         msg
       end
     end
@@ -124,54 +128,5 @@ module Lapaz
       end
     end
 
-    class Prices < Base
-      include Lapaz::Mongo::Reader
-      def initialize(opts)
-        @collection = lapazcfg.mongo.db.collection(opts.delete(:mongo_collection))
-        super
-      end
-      def work(msg)
-        super
-        find = {'ccy_pair'=>'EURGBP'}
-        prices = []
-        read(find).each do |doc|
-          prices << doc.to_hash
-        end
-        msg.add :body,{:prices=>prices}
-      end
-    end
-
-    class Purchases < Base
-      include Lapaz::Mongo::Reader
-      def initialize(opts)
-        @collection = lapazcfg.mongo.db.collection(opts.delete(:mongo_collection))
-        super
-      end
-      def work(msg)
-        super
-        id = msg.headers[:path_params][:id]
-        #is something?
-        find = {'id'=>id}
-        purchases = []
-        read(find).each do |doc|
-          purchases << doc.to_hash
-        end
-        msg.add :body,{:purchases=>purchases}
-      end
-    end
-
-    class Contacts  < Base
-      def work(msg)
-        super
-        msg.add :body,{:contacts=>[{'id'=>'886644','name'=>'Bob Smith','age'=>32,'notes'=>'rest of contact object here'}]}
-      end
-    end
-
-    class StockItems < Base
-      def work(msg)
-        super
-        msg.add :body,{:stock_items=>[{'id'=>'4521','name'=>'Widget X','price'=>45.21,'ccy'=>'EUR','notes'=>'rest of stock object here'}]}
-      end
-    end
   end
 end

@@ -7,5 +7,4 @@ requires.each do |lib|
   require File.join('lapaz',lib)
 end
 
-#require 'eip'
-#require 'filter'
+

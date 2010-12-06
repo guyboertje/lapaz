@@ -17,7 +17,7 @@ module Lapaz
       if response
         ret = response.path.route.destination.dup
         blk = ret.delete(:block)
-        ret[:path_params] = response.params.inject({}){|h,(k,v)| h[k]=v; h}
+        ret[:path_params] = response.params.inject({}){|h,(k,v)| h[k]=v; h} if response.params
         if blk
           blk.call(ret)
         else
@@ -25,7 +25,7 @@ module Lapaz
           ret
         end
       else
-        @unrecognize_block ? @unrecognize_block.call(stripped) : {:lapaz_path => 'errors/mongrel', :path_params =>{}}
+        @unrecognize_block ? @unrecognize_block.call(stripped) : {:lapaz_path=>'errors/mongrel', :path_params=>[{}]}
       end
     end
 
@@ -38,8 +38,6 @@ module Lapaz
     def build(opts = nil, &blk)
       o = opts.dup
       url_pattern = o.delete(:path_pattern)
-      o[:view_template] ||= ''
-      o[:view_layout] ||= ''
       o[:block] = blk
       @usher.add_route(url_pattern).to(o)
     end

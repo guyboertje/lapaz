@@ -18,19 +18,19 @@ Lapaz::ZeroMqPub = Class.new(Lapaz::ZeroMq) { include Lapaz::ZeroFfi::Pub }
 #  lapazcfg('hermes').mongrel = {}
 
 _ctx = ZMQ::Context.new(1)
-_app_id = UUID.generate
+_app_id = "395a0e80-df3a-012d-692b-002354d918f8" #UUID.generate
 _svc_topic_base = "lapaz/svc"
-lapazcfg.mongrel = {:sender_id=>::UUID.generate,:scheme=>"tcp",:host=>"127.0.0.1",:req_port=>"9997",:rep_port=>"9996", :ctx=>_ctx, :conn=>nil}
+lapazcfg.mongrel = {:sender_id=>::UUID.generate,:scheme=>"tcp",:host=>"127.0.0.1",:req_port=>"9987",:rep_port=>"9986", :ctx=>_ctx, :conn=>nil}
 
 #epgm://eth0;239.192.1.1:1100
-lapazcfg.svc = {:scheme=>"epgm",:host=>"239.192.1.1",:port=>"100", :endpt=>"", :ctx=>_ctx, :topic_base=>_svc_topic_base, :for_us_re=>nil}
+lapazcfg.svc = {:scheme=>"epgm", :host=>"239.192.1.1", :port=>"1100", :iface=>'eth0', :endpt=>"", :ctx=>_ctx, :topic_base=>_svc_topic_base, :for_us_re=>nil}
 lapazcfg.svc do |cfg|
-  cfg.endpt = "#{cfg.scheme}://lo;#{cfg.host}:#{PortPfx}#{cfg.port}"
+  cfg.endpt = "#{cfg.scheme}://#{cfg.iface};#{cfg.host}:#{PortPfx}#{cfg.port}"
   cfg.for_us_re = /^#{_svc_topic_base}\/.+\/(#{_app_id}|_all_|_any_)/
 end
 
 #lapazcfg.app = {:scheme=>"tcp",:host=>"127.0.0.1",:port=>"4066", :endpt=>"", :ctx=>_ctx}
-lapazcfg.app = {:uuid=>"",:scheme=>"inproc",:key=>"lapaz", :endpt=>"", :ctx=>_ctx}
+lapazcfg.app = {:uuid=>"",:scheme=>"inproc",:key=>_app_id, :endpt=>"", :ctx=>_ctx, :topic_base=>'lapaz-',:debug=>false}
 lapazcfg.app do |cfg|
   cfg.uuid = _app_id
   case cfg.scheme
@@ -51,10 +51,6 @@ lapazcfg.mongo do |cfg|
   cfg.con = Mongo::Connection.new(cfg.host, (PortPfx + cfg.port).to_i, cfg.con_cfg)
   db = cfg.db = cfg.con.db(cfg.db_name)
 end
-
-
-
-
 
 populate = false
 # populate the db

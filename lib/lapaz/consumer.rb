@@ -7,8 +7,21 @@ module Lapaz
 
     class Stdout < Base
       def work(msg)
-        puts "RECV: #{msg.inspect}"
-        Lapaz::DefaultMessage.new
+        puts "-------------------- RECV: #{msg.inspect}"
+        nil
+      end
+    end
+
+    class Looper < Base
+      def initialize(opts)
+        super
+        @loop_to = opts[:loop_to]
+      end
+      def push(msg)
+        q_msg = q_able || Queueable.new(@pub_to,@loop_to,@mux_id)
+        q_msg.msg = DefCoder.encode(msg.to_hash)
+        @app.enqueue(q_msg)
+        msg
       end
     end
 
@@ -55,17 +68,23 @@ module Lapaz
       end
     end
 
-    class ExternalRunner < Base
+    class McastQuery < McastSender
       def work(msg)
-        params = msg.headers[:path_params]
-        source = (params && params[:source]) ? params[:source] : nil
-        route = (params && params[:route]) ? params[:route] : nil
-        seq = (params && params[:seq]) ? params[:seq] : 0
-        msg.add :headers, {:route_to_run=> "#{route}/#{seq}", :svc_path => "#{lapazcfg.svc.topic_base}/#{app.uuid}/#{source}/result"}
+        msg.headers[:svc_path] = "#{lapazcfg.svc.topic_base}/#{app.uuid}/_all_/query"
+        msg.replace :body, app.services(true)
+      end
+    end
+
+    class CallInRunner < Base
+      def work(msg)
+        source = msg.fetch(:headers,:path_params,:source)
+        route = msg.fetch(:headers,:path_params,:route)
+        seq = msg.fetch(:headers,:path_params,:seq)
+        msg.add :headers, {:route_to_run=> "#{route}/#{seq}", :svc_path => "#{lapazcfg.svc.topic_base}/#{app.uuid}/#{source}/reply"}
       end
       def push(msg,q_able=nil)
         if @reply_to
-          msg.headers[:reply_to] << @reply_to
+          msg.add_reply_to @reply_to
         end
         lap = msg.headers.delete(:route_to_run)
         r,s,m = lap.split('/',3)
@@ -94,7 +113,7 @@ module Lapaz
       end
 
       def work(msg)
-        mime = (msg.body[:mime] == 'json') ? "application/json" : "text/html"
+        mime = (msg.body['mime'] == 'json') ? "application/json" : "text/html"
         msg.body[:mongrel_http_hdrs] = {'Content-type'=>"#{mime}; charset=utf-8"}
 
         return msg unless msg.body[:mongrel_http_body].nil?

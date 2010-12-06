@@ -10,8 +10,8 @@ module Lapaz
       #puts "#{@route_name} #{@seq_id} >"
       @workunit, @forward_to, @reply_to = opts.values_at(:work, :forward_to, :reply_to)
       @loop_once = opts[:loop_once] || false
-      @sub_topic = "#{@route_name}/#{@seq_id}"
       @ext = !!(@ext)
+
       if @forward_to
         if @reply_to && @mux_id
           @reply_to += "/#{@mux_id}"
@@ -27,6 +27,7 @@ module Lapaz
       @collator = {}
       @endpt = lapazcfg.app.endpt
       @ctx = lapazcfg.app.ctx
+      @sub_topic = lapazcfg.app.topic_base + "#{@route_name}/#{@seq_id}"
     end
 
     def producer?; false; end
@@ -35,7 +36,7 @@ module Lapaz
     def describe(external_only=false)
       return nil unless @name
       return nil unless @ext
-      {'lapaz_route'=>{'path'=>"#{@route_name}/#{@name}", 'externally_callable'=>@ext}}
+      {:lapaz_route=>{:path=>"#{@route_name}/#{@name}", :externally_callable=>@ext}}
     end
     def to_hash
       {:route_name=>@route_name, :seq_id=>@seq_id, :mux_id=>@mux_id, :sub_topic=>@sub_topic}
@@ -55,7 +56,7 @@ module Lapaz
           puts "!#{e.inspect}"
           puts "backtrace::::: #{e.backtrace}"
         ensure
-          sock.close
+          trans.close
         end
       end
     end
@@ -110,8 +111,10 @@ module Lapaz
     end
 
     def push(msg,q_able=nil)
+      return nil unless msg
+
       if @reply_to
-        msg.headers[:reply_to] << @reply_to
+        msg.add_reply_to @reply_to
       end
       q_msg = q_able || Queueable.new(@pub_to,@pub_at,@mux_id)
       #puts "component push queueable: #{q_msg.inspect}"
@@ -134,8 +137,7 @@ module Lapaz
 
     def pull(msg,trans)
       topic,body = trans.receive
-      msge = Lapaz::DefaultMessage.new(body ? DefCoder.decode(body) : {}).merge!(msg)
-      #puts "<<-#{topic}"
+      msge = Lapaz::Message.new(body ? DefCoder.decode(body) : {}).merge!(msg)
       {:message=>msge,:topic=>topic}
     end
 
@@ -157,6 +159,9 @@ module Lapaz
       def named?
         !@name.empty?
       end
+      def ext_route
+        "#{route}/#{name}"
+      end
       def topic
         a = [route]
         a << seq_id if seq_id && seq_id > -1
@@ -164,7 +169,7 @@ module Lapaz
         a.join('/')
       end
       def inspect
-        "route: #{@route}, name: #{@name}, mux: #{@mux}, seq_id: #{@seq_id}"
+        "route: #{@route}, name: #{@name}, mux: #{@mux}, seq_id: #{@seq_id}, msg: #{@msg.inspect}"
       end
     end
 

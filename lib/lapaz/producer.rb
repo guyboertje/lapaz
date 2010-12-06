@@ -7,36 +7,52 @@ module Lapaz
       # but for producers, first in line, there is no sub topic
       def pull(msg,trans)
         msg = Lapaz::DefaultMessage.new unless msg
-        msg.headers[:iter_id] = ::UUID.generate
+        msg.add_iteration_id
         super(msg,trans)
       end
       def postamble(msg)
-        msg.headers[:iter_id] = ::UUID.generate
+        msg.add_iteration_id
         {:message=>msg,:topic=>'NULL'}
       end
     end
 
-    class FileProducer < Base
-      def initialize(opts={})
-        @filename = opts.delete(:filename)
+    class Lurker < Base
+      def initialize(opts)
         super
+        ot = @sub_topic
+        @ignore = ot.split('/',3).first
+        @sub_topic = opts[:observe_topic] || ''
       end
 
-      def pull(msg,skt)
-        msg = Lapaz::DefaultMessage.new(:kind=>'file_contents') unless msg
-        b = ""
-        File.open(@filename) do |f|
-          b = f.read
+      def pull(msg,trans)
+        interested = false
+        topic = body = nil
+        until interested
+          topic,body = trans.receive
+          interested = !topic.start_with?(@ignore)
         end
-        msg.body[:file_contents] = b
-        postamble msg
+        puts "----------------++++ RECV: #{topic}"
+        msge = Lapaz::Message.new(body ? DefCoder.decode(body) : {}).merge!(msg)
+        {:message=>msge,:topic=>topic}
       end
     end
 
-    class YamlFileProducer < FileProducer
-      def initialize(opts); super; @loop_once = true; end
+    class Repeater < Base
+      def initialize(opts)
+        super
+        @repeat = opts[:initial_x_secs] || 15
+        @every = opts[:every_x_secs] || 120
+      end
+
+      def pull(msg,trans)
+        topic = 'repeater/0'
+        sleep(@repeat)
+        msg = Lapaz::Message.new(:kind=>'repeater')
+        {:message=>msg,:topic=>topic}
+      end
       def work(msg)
-        msg.add_to :headers,{:file_contents_type => 'yaml'}
+        @repeat = @every
+        msg
       end
     end
 
@@ -52,8 +68,9 @@ module Lapaz
 
       def pull(msg,trans)
         h = {}
-        lapazcfg.mongrel.conn.recv do |req|
-          h = req.to_hash
+        while h.empty?
+          req = lapazcfg.mongrel.conn.recv
+          h = req.to_hash unless req.disconnect?
         end
         msg = Lapaz::MongrelMessage.new(h)
         postamble msg
@@ -61,7 +78,6 @@ module Lapaz
     end
 
     class McastReceiver < Lapaz::Component
-
       def initialize(opts)
         super
         @sub_topic = lapazcfg.svc.topic_base
@@ -72,14 +88,13 @@ module Lapaz
         got_one = false
         topic = body = nil
         until got_one
-          topic,body = trans.receive
+          topic, body = trans.receive
           from_us = topic.start_with?("#{lapazcfg.svc.topic_base}/#{app.uuid}")
           for_us = !!(topic =~ lapazcfg.svc.for_us_re)
           got_one = for_us && !from_us
         end
-        msge = Lapaz::DefaultMessage.new(body ? ExtCoder.decode(body) : {}).merge!(msg)
+        msge = Lapaz::McastMessage.new(ExtCoder.decode(body))
         msge.headers['PATH'] = topic
-        #puts "<<-#{topic}"
         {:message=>msge,:topic=>topic}
       end
     end

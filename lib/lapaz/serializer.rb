@@ -15,7 +15,7 @@ module Lapaz
     end
     def decode(obj)
       return obj unless obj.kind_of?(String) && obj.start_with?("{")
-      JSON.parse(obj)
+      JSON.parse(obj, :symbolize_names=>true)
     end
   end
 

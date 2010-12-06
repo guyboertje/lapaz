@@ -32,11 +32,10 @@ module Mongrel2
       self.new(sender, conn_id, path, headers, body)
     end
 
-    def is_disconnect
-      if self.headers['METHOD'] == 'JSON'
-        @data['type'] == 'disconnect'
-      end
+    def disconnect?
+      headers['METHOD'] == 'JSON' && @data['type'] == 'disconnect'
     end
+
     def to_hash
       {:sender=>@sender, :conn_id=>@conn_id, :path=>@path, :headers=>@headers, :body=>@body}
     end
