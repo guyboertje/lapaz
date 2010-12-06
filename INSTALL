@@ -2,9 +2,48 @@ Installation Instructions
 
 Zero MQ
 
+Follow these instructions.
+http://www.zeromq.org/intro:get-the-software
+But if you want to use the Multicast capabilities then
+make sure you add the switch --with-pgm to the configure command
+e.g.
+./configure --with-pgm
+
+
 Mongrel2
+
+Follow these instructions
+http://mongrel2.org/doc/tip/docs/manual/book.wiki#x1-140002.2.1
 
 MongoDB
 
+Follow these instructions
+http://www.mongodb.org/downloads
+Use the package for your distro if possible
+
 Gems
 
+ffi-rzmq      - ffi bindings for the zmq c libs
+bert          - binary encoder, used to serialize messages
+uuid          - unique references
+blockenspiel  - easy DSL creation
+usher         - standard path recognition for zmp subscriber topics and http calls from mongrel2
+erubis        - faster erb template handling
+tilt          - general rendering framework to handle numerous template engines
+json          - serialize messages for javascript clients and also inter-app messaging.
+jmongo        - wrapper for java mongo driver, mostly compatible with the ruby driver
+
+Note: the :symbolize_names=>true option is used in the JSON.parse method - using
+another JSON lib will be difficult unless you opt for BERT encoding (or similar) for
+inter-app message serialisation.  I chose JSON for debug readability.
+
+
+To try out the example apps I suggest you copy them out and symlink to the lapaz lib dir.
+e.g.
+lapaz
+  lib
+lapaz-a
+  symlink-to-lapaz/lib
+lapaz-b
+  symlink-to-lapaz/lib
+I am working at splitting the configs to make lapaz gem-able.
