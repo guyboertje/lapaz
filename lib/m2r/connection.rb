@@ -27,7 +27,7 @@ module Mongrel2
 
       @resp = @ctx.socket(ZMQ::PUB)
       @resp.connect(@pub_addr)
-      @resp.setsockopt(ZMQ::IDENTITY, @sender_id)
+      @resp.identity= @sender_id
     end
 
     # Receives a raw Request object that you

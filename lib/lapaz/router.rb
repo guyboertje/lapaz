@@ -9,10 +9,10 @@ module Lapaz
 
       attr_reader :name, :app, :named_steps
 
-      def initialize(opts,app)
+      def initialize(opts, app)
         @name = opts[:route_name]
         @route_uuid = ::UUID.generate
-        @loop_once = opts[:loop_once] || false
+        @loop_once = opts.fetch(:loop_once, false)
         @opts = opts
         @chain = []
         @app = app
@@ -28,7 +28,7 @@ module Lapaz
         ret
       end
 
-      def publish(trans,q_object)
+      def publish(trans, q_object)
         raise "In route: #{self.name}, cannot find a step named: #{q_object.name}" if q_object.named? && !@named_steps.has_key?(q_object.name)
         if q_object.named?
           q_object.seq_id = @named_steps[q_object.name]
@@ -66,15 +66,20 @@ module Lapaz
         @chain.push(component)
         @named_steps[component.name] = component.seq_id if component.name
       end
+
     end
+
     class ExtRoutesCache
+
       def initialize()
         @cache = {}
       end
+
       def add(services)
         uuid,routes = services.values_at(:app_id,:routes)
         @cache[uuid] = routes
       end
+
       def find(route)
         ret = []
         @cache.each do |id,routes|
@@ -85,7 +90,9 @@ module Lapaz
         end
         ret
       end
+
     end
+
     class Router
       include Blockenspiel::DSL
       attr_reader :path_handler, :name, :uuid
@@ -148,7 +155,7 @@ module Lapaz
       end
 
       def run()
-        # for inproc have to bind before connecting in the component subscribe
+        # ZeroMq inproc sockets have to bind before connecting in the component subscribe
         int = ZeroMqPub.new(@ctx, lapazcfg.app.endpt)
         int.setup_publish
 
